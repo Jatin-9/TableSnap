@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, supabaseUser, loading } = useAuth();
 
   if (loading) {
     return (
@@ -17,12 +17,22 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
     );
   }
 
-  if (!user) {
+  if (!supabaseUser) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && user.role !== 'super_admin') {
-    return <Navigate to="/dashboard" replace />;
+  if (requireAdmin) {
+    if (!user) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+
+    if (user.role !== 'super_admin') {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;

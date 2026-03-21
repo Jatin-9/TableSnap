@@ -25,12 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         setSupabaseUser(session.user);
         await fetchUserProfile(session.user.id);
+      } else {
+        setSupabaseUser(null);
+        setUser(null);
       }
       setLoading(false);
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       (async () => {
+        setLoading(true);
         if (session?.user) {
           setSupabaseUser(session.user);
           await fetchUserProfile(session.user.id);
@@ -38,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSupabaseUser(null);
           setUser(null);
         }
+        setLoading(false);
       })();
     });
 
@@ -55,6 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data);
     } else if (error) {
       console.error('Error fetching user profile:', error);
+      setUser(null);
+    } else {
+      setUser(null);
     }
   };
 
