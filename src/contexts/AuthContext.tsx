@@ -21,20 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        await fetchUserProfile(session.user.id);
-      } else {
-        setSupabaseUser(null);
-        setUser(null);
-      }
-      setLoading(false);
-    })();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setSupabaseUser(session.user);
           await fetchUserProfile(session.user.id);
@@ -42,7 +30,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSupabaseUser(null);
           setUser(null);
         }
+      } catch (err) {
+        console.error('Auth getSession failed:', err);
+        setSupabaseUser(null);
+        setUser(null);
+      } finally {
         setLoading(false);
+      }
+    })();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      (async () => {
+        setLoading(true);
+        try {
+          if (session?.user) {
+            setSupabaseUser(session.user);
+            await fetchUserProfile(session.user.id);
+          } else {
+            setSupabaseUser(null);
+            setUser(null);
+          }
+        } catch (err) {
+          console.error('AuthStateChange handler failed:', err);
+          setSupabaseUser(null);
+          setUser(null);
+        } finally {
+          setLoading(false);
+        }
       })();
     });
 
@@ -50,18 +64,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (data) {
-      setUser(data);
-    } else if (error) {
-      console.error('Error fetching user profile:', error);
-      setUser(null);
-    } else {
+      if (data) {
+        setUser(data);
+      } else if (error) {
+        console.error('Error fetching user profile:', error);
+        setUser(null);
+      } else {
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('fetchUserProfile failed:', err);
       setUser(null);
     }
   };
