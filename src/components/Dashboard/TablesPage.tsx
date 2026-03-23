@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Filter, Download, Eye, Trash2, Calendar, Tag } from 'lucide-react';
+import UploadPage from '../Upload/UploadPage';
 
 export default function TablesPage() {
   const { user } = useAuth();
@@ -259,6 +260,7 @@ export default function TablesPage() {
           </div>
         </div>
       )}
+      <UploadPage />
     </div>
   );
 }

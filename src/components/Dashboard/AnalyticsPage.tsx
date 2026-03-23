@@ -38,6 +38,11 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if(!user){
+      setLoading(false);
+        console.error("user not found");
+      
+    }
     if (user) {
       fetchAnalytics();
     }
@@ -59,11 +64,13 @@ export default function AnalyticsPage() {
 
     if (analyticsData) {
       setAnalytics(analyticsData);
+      setLoading(false);
     }
 
     if (snapshotsData) {
       setTotalTables(snapshotsData.length);
       setTotalRows(snapshotsData.reduce((sum, s) => sum + s.row_count, 0));
+      setLoading(false);
     }
 
     setLoading(false);
