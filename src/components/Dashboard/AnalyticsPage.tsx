@@ -16,6 +16,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Download, TrendingUp } from 'lucide-react';
+import { data } from 'react-router-dom';
 
 ChartJS.register(
   CategoryScale,
@@ -38,11 +39,6 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if(!user){
-      setLoading(false);
-        console.error("user not found");
-      
-    }
     if (user) {
       fetchAnalytics();
     }
@@ -64,13 +60,11 @@ export default function AnalyticsPage() {
 
     if (analyticsData) {
       setAnalytics(analyticsData);
-      setLoading(false);
     }
 
     if (snapshotsData) {
       setTotalTables(snapshotsData.length);
       setTotalRows(snapshotsData.reduce((sum, s) => sum + s.row_count, 0));
-      setLoading(false);
     }
 
     setLoading(false);
@@ -132,16 +126,36 @@ export default function AnalyticsPage() {
     };
   })();
 
-  const rowsAddedData = {
-    labels: analytics.slice(-7).map((a) => new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-    datasets: [
-      {
-        label: 'Rows Added',
-        data: analytics.slice(-7).map((a) => a.rows_added),
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-      },
-    ],
-  };
+// Generate the last 7 days as a "Template"
+
+const last7days = () => {
+  const day = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    day.push(date.toISOString().split('T')[0]);
+  }
+  return day;
+}
+const last7 = last7days();
+
+const rowsAddedData = {
+  // Use the template for labels (This fixes the X-Axis)
+  labels: last7.map((d) => 
+    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  ),
+  datasets: [
+    {
+      label: 'Rows Added',
+      // Match your analytics data to the specific date or return 0
+      data: last7.map((date) => {
+        const record = analytics.find((a) => a.date === date);
+        return record ? record.rows_added : 0; 
+      }),
+      backgroundColor: 'rgba(16, 185, 129, 0.8)',
+    },
+  ],
+};
 
   const exportAnalytics = () => {
     const headers = 'Date,Tables Created,Rows Added,Tags\n';
