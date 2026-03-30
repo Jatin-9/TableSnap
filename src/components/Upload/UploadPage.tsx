@@ -13,6 +13,26 @@ type ExtractedData = {
   rawText: string;
 };
 
+type OCRWord = {
+  text: string;
+  bbox?: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
+};
+
+type PreparedWord = {
+  text: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  centerX: number;
+  centerY: number;
+};
+
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -25,7 +45,6 @@ export default function UploadPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] ?? null;
-
     if (!selectedFile) return;
 
     if (!selectedFile.type.startsWith('image/')) {
@@ -77,8 +96,177 @@ export default function UploadPage() {
     return tags.length > 0 ? tags : ['General'];
   };
 
-  const parseLinesToTable = (rawText: string) => {
-    const lines = rawText
+  const preprocessImage = (inputFile: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const img = new Image();
+
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const scale = 2;
+
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not create canvas context'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            if (gray > 165) gray = 255;
+            else if (gray < 95) gray = 0;
+            else gray = Math.min(255, Math.max(0, (gray - 95) * 2));
+
+            data[i] = gray;
+            data[i + 1] = gray;
+            data[i + 2] = gray;
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image for preprocessing'));
+        img.src = reader.result as string;
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(inputFile);
+    });
+  };
+
+  const preprocessWords = (words: OCRWord[]): PreparedWord[] => {
+    return words
+      .filter((word) => word.text && word.text.trim().length > 0 && word.bbox)
+      .map((word) => ({
+        text: word.text.trim(),
+        x0: word.bbox!.x0,
+        y0: word.bbox!.y0,
+        x1: word.bbox!.x1,
+        y1: word.bbox!.y1,
+        centerX: (word.bbox!.x0 + word.bbox!.x1) / 2,
+        centerY: (word.bbox!.y0 + word.bbox!.y1) / 2,
+      }));
+  };
+
+  const groupWordsIntoRows = (words: PreparedWord[], yTolerance = 18): PreparedWord[][] => {
+    const sorted = [...words].sort((a, b) => {
+      const yDiff = a.centerY - b.centerY;
+      if (Math.abs(yDiff) > 1) return yDiff;
+      return a.x0 - b.x0;
+    });
+
+    const rows: PreparedWord[][] = [];
+
+    for (const word of sorted) {
+      let bestRowIndex = -1;
+      let bestDistance = Infinity;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const avgY = row.reduce((sum, item) => sum + item.centerY, 0) / row.length;
+        const distance = Math.abs(avgY - word.centerY);
+
+        if (distance <= yTolerance && distance < bestDistance) {
+          bestDistance = distance;
+          bestRowIndex = i;
+        }
+      }
+
+      if (bestRowIndex >= 0) {
+        rows[bestRowIndex].push(word);
+      } else {
+        rows.push([word]);
+      }
+    }
+
+    return rows
+      .map((row) => [...row].sort((a, b) => a.x0 - b.x0))
+      .sort((a, b) => {
+        const avgA = a.reduce((sum, item) => sum + item.centerY, 0) / a.length;
+        const avgB = b.reduce((sum, item) => sum + item.centerY, 0) / b.length;
+        return avgA - avgB;
+      });
+  };
+
+  const inferColumnAnchors = (rows: PreparedWord[][], xTolerance = 45): number[] => {
+    const anchors: number[] = [];
+
+    for (const row of rows) {
+      for (const word of row) {
+        const existingIndex = anchors.findIndex(
+          (anchor) => Math.abs(anchor - word.x0) <= xTolerance
+        );
+
+        if (existingIndex >= 0) {
+          anchors[existingIndex] = Math.round((anchors[existingIndex] + word.x0) / 2);
+        } else {
+          anchors.push(word.x0);
+        }
+      }
+    }
+
+    return anchors.sort((a, b) => a - b);
+  };
+
+  const assignWordsToColumns = (rows: PreparedWord[][], anchors: number[]) => {
+    if (anchors.length === 0) {
+      return {
+        tableData: [] as Record<string, string>[],
+        columnNames: ['Text'],
+      };
+    }
+
+    const columnNames = anchors.map((_, index) => `Column ${index + 1}`);
+
+    const tableData = rows.map((row) => {
+      const cells = Array.from({ length: anchors.length }, () => '');
+
+      for (const word of row) {
+        let bestIndex = 0;
+        let bestDistance = Math.abs(word.x0 - anchors[0]);
+
+        for (let i = 1; i < anchors.length; i++) {
+          const distance = Math.abs(word.x0 - anchors[i]);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = i;
+          }
+        }
+
+        cells[bestIndex] = cells[bestIndex]
+          ? `${cells[bestIndex]} ${word.text}`
+          : word.text;
+      }
+
+      const rowObject: Record<string, string> = {};
+      columnNames.forEach((col, idx) => {
+        rowObject[col] = cells[idx] ?? '';
+      });
+
+      return rowObject;
+    });
+
+    return { tableData, columnNames };
+  };
+
+  const fallbackTextToTable = (text: string) => {
+    const lines = text
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
@@ -90,33 +278,10 @@ export default function UploadPage() {
       };
     }
 
-    const splitRows = lines.map((line) =>
-      line
-        .split(/\t+|\s{2,}/)
-        .map((cell) => cell.trim())
-        .filter(Boolean)
-    );
-
-    const maxCols = Math.max(...splitRows.map((row) => row.length), 1);
-
-    if (maxCols === 1) {
-      return {
-        tableData: lines.map((line) => ({ Text: line })),
-        columnNames: ['Text'],
-      };
-    }
-
-    const columnNames = Array.from({ length: maxCols }, (_, i) => `Column ${i + 1}`);
-
-    const tableData = splitRows.map((row) => {
-      const obj: Record<string, string> = {};
-      columnNames.forEach((col, idx) => {
-        obj[col] = row[idx] ?? '';
-      });
-      return obj;
-    });
-
-    return { tableData, columnNames };
+    return {
+      tableData: lines.map((line) => ({ Text: line })),
+      columnNames: ['Text'],
+    };
   };
 
   const processOCR = async () => {
@@ -128,26 +293,56 @@ export default function UploadPage() {
     let worker: any = null;
 
     try {
+      const processedImage = await preprocessImage(file);
+
       worker = await createWorker(['eng', 'jpn'], 1, {
-        logger: (m) => {
-          if (m.status) {
+        logger: (message: any) => {
+          if (message.status) {
             const percent =
-              typeof m.progress === 'number' ? ` ${Math.round(m.progress * 100)}%` : '';
-            setOcrStatus(`${m.status}${percent}`);
+              typeof message.progress === 'number'
+                ? ` ${Math.round(message.progress * 100)}%`
+                : '';
+            setOcrStatus(`${message.status}${percent}`);
           }
-          console.log('OCR:', m);
+          console.log('OCR:', message);
         },
       });
 
       await worker.setParameters({
-        tessedit_pageseg_mode: PSM.AUTO,
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
       });
 
-      const {
-        data: { text, confidence },
-      } = await worker.recognize(file);
+      const result = await worker.recognize(processedImage);
+      const text: string = result?.data?.text ?? '';
+      const confidence: number = result?.data?.confidence ?? 0;
+      const words: OCRWord[] = result?.data?.words ?? [];
 
-      const { tableData, columnNames } = parseLinesToTable(text);
+      console.log('OCR full result:', result);
+      console.log('OCR text:', text);
+      console.log('OCR words:', words);
+
+      let tableData: Record<string, string>[] = [];
+      let columnNames: string[] = ['Text'];
+
+      const preparedWords = preprocessWords(words);
+
+      if (preparedWords.length > 0) {
+        const rows = groupWordsIntoRows(preparedWords, 18);
+        const anchors = inferColumnAnchors(rows, 45);
+        const parsed = assignWordsToColumns(rows, anchors);
+
+        if (parsed.tableData.length > 0) {
+          tableData = parsed.tableData;
+          columnNames = parsed.columnNames;
+        }
+      }
+
+      if (tableData.length === 0) {
+        const fallback = fallbackTextToTable(text);
+        tableData = fallback.tableData;
+        columnNames = fallback.columnNames;
+      }
+
       const autoTags = detectTags(text, columnNames);
 
       setExtractedData({
@@ -158,7 +353,9 @@ export default function UploadPage() {
         rawText: text,
       });
 
-      setOcrStatus('OCR complete');
+      setOcrStatus(
+        tableData.length > 0 ? 'OCR complete' : 'No readable text could be extracted'
+      );
     } catch (error) {
       console.error('OCR Error:', error);
       alert(
@@ -215,9 +412,7 @@ export default function UploadPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Upload Table Image</h1>
-          <p className="text-gray-600">
-            Upload a photo of any table and extract data using OCR
-          </p>
+          <p className="text-gray-600">Upload a photo of any table and extract data using OCR</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
