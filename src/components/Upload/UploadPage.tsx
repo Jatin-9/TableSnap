@@ -284,7 +284,9 @@ export default function UploadPage() {
     };
   };
 
-  const processOCR = async () => {
+//debugging purpose since the OCR call is being made but 401 issue is seen
+
+const processOCR = async () => {
   if (!file || !user) return;
 
   setLoading(true);
@@ -294,31 +296,19 @@ export default function UploadPage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const { data, error } = await supabase.functions.invoke('ocr-extract', {
-      body: formData,
-    });
+    const response = await fetch(
+      'https://nmuiueuoolvkssueutyq.supabase.co/functions/v1/ocr-extract',
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
 
-    if (error) {
-      console.error('Edge function OCR error:', error);
-      throw new Error(error.message || 'OCR function failed');
-    }
+    const text = await response.text();
+    console.log('RAW FUNCTION RESPONSE:', text);
+    alert(text);
 
-    const columnNames = Array.isArray(data?.columnNames) ? data.columnNames : ['Text'];
-    const tableData = Array.isArray(data?.tableData) ? data.tableData : [];
-    const rawText = typeof data?.rawText === 'string' ? data.rawText : '';
-    const confidence = typeof data?.confidence === 'number' ? data.confidence : 0;
-
-    const autoTags = detectTags(rawText, columnNames);
-
-    setExtractedData({
-      tableData,
-      columnNames,
-      autoTags,
-      confidence,
-      rawText,
-    });
-
-    setOcrStatus('OCR complete');
+    setOcrStatus('Debug response received');
   } catch (error) {
     console.error('OCR Error:', error);
     alert(
