@@ -285,91 +285,52 @@ export default function UploadPage() {
   };
 
   const processOCR = async () => {
-    if (!file || !user) return;
+  if (!file || !user) return;
 
-    setLoading(true);
-    setOcrStatus('Starting OCR...');
+  setLoading(true);
+  setOcrStatus('Uploading image for OCR...');
 
-    let worker: any = null;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
 
-    try {
-      const processedImage = await preprocessImage(file);
+    const { data, error } = await supabase.functions.invoke('ocr-extract', {
+      body: formData,
+    });
 
-      worker = await createWorker(['eng', 'jpn'], 1, {
-        logger: (message: any) => {
-          if (message.status) {
-            const percent =
-              typeof message.progress === 'number'
-                ? ` ${Math.round(message.progress * 100)}%`
-                : '';
-            setOcrStatus(`${message.status}${percent}`);
-          }
-          console.log('OCR:', message);
-        },
-      });
-
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
-      });
-
-      const result = await worker.recognize(processedImage);
-      const text: string = result?.data?.text ?? '';
-      const confidence: number = result?.data?.confidence ?? 0;
-      const words: OCRWord[] = result?.data?.words ?? [];
-
-      console.log('OCR full result:', result);
-      console.log('OCR text:', text);
-      console.log('OCR words:', words);
-
-      let tableData: Record<string, string>[] = [];
-      let columnNames: string[] = ['Text'];
-
-      const preparedWords = preprocessWords(words);
-
-      if (preparedWords.length > 0) {
-        const rows = groupWordsIntoRows(preparedWords, 18);
-        const anchors = inferColumnAnchors(rows, 45);
-        const parsed = assignWordsToColumns(rows, anchors);
-
-        if (parsed.tableData.length > 0) {
-          tableData = parsed.tableData;
-          columnNames = parsed.columnNames;
-        }
-      }
-
-      if (tableData.length === 0) {
-        const fallback = fallbackTextToTable(text);
-        tableData = fallback.tableData;
-        columnNames = fallback.columnNames;
-      }
-
-      const autoTags = detectTags(text, columnNames);
-
-      setExtractedData({
-        tableData,
-        columnNames,
-        autoTags,
-        confidence: Number(Number(confidence ?? 0).toFixed(1)),
-        rawText: text,
-      });
-
-      setOcrStatus(
-        tableData.length > 0 ? 'OCR complete' : 'No readable text could be extracted'
-      );
-    } catch (error) {
-      console.error('OCR Error:', error);
-      alert(
-        `Error processing image: ${
-          error instanceof Error ? error.message : JSON.stringify(error)
-        }`
-      );
-    } finally {
-      if (worker) {
-        await worker.terminate();
-      }
-      setLoading(false);
+    if (error) {
+      console.error('Edge function OCR error:', error);
+      throw new Error(error.message || 'OCR function failed');
     }
-  };
+
+    const columnNames = Array.isArray(data?.columnNames) ? data.columnNames : ['Text'];
+    const tableData = Array.isArray(data?.tableData) ? data.tableData : [];
+    const rawText = typeof data?.rawText === 'string' ? data.rawText : '';
+    const confidence = typeof data?.confidence === 'number' ? data.confidence : 0;
+
+    const autoTags = detectTags(rawText, columnNames);
+
+    setExtractedData({
+      tableData,
+      columnNames,
+      autoTags,
+      confidence,
+      rawText,
+    });
+
+    setOcrStatus('OCR complete');
+  } catch (error) {
+    console.error('OCR Error:', error);
+    alert(
+      `Error processing image: ${
+        error instanceof Error ? error.message : JSON.stringify(error)
+      }`
+    );
+    setOcrStatus('OCR failed');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const saveTable = async () => {
     if (!extractedData || !user) return;
