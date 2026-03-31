@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { createWorker, PSM } from 'tesseract.js';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -11,26 +10,6 @@ type ExtractedData = {
   autoTags: string[];
   confidence: number;
   rawText: string;
-};
-
-type OCRWord = {
-  text: string;
-  bbox?: {
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-  };
-};
-
-type PreparedWord = {
-  text: string;
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  centerX: number;
-  centerY: number;
 };
 
 export default function UploadPage() {
@@ -96,231 +75,77 @@ export default function UploadPage() {
     return tags.length > 0 ? tags : ['General'];
   };
 
-  const preprocessImage = (inputFile: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+  const processOCR = async () => {
+    if (!file || !user) return;
 
-      reader.onload = () => {
-        const img = new Image();
+    setLoading(true);
+    setOcrStatus('Uploading image for OCR...');
 
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const scale = 2;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
+//trying to resolve the JWT auth issue in supabase
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Could not create canvas context'));
-            return;
-          }
+      const { data: sessionData } = await supabase.auth.getSession()
+const accessToken = sessionData.session?.access_token
 
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+const headers: Record<string, string> = {
+  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+}
 
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
+if (accessToken) {
+  headers['Authorization'] = `Bearer ${accessToken}`
+}
 
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-
-            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-            if (gray > 165) gray = 255;
-            else if (gray < 95) gray = 0;
-            else gray = Math.min(255, Math.max(0, (gray - 95) * 2));
-
-            data[i] = gray;
-            data[i + 1] = gray;
-            data[i + 2] = gray;
-          }
-
-          ctx.putImageData(imageData, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-
-        img.onerror = () => reject(new Error('Failed to load image for preprocessing'));
-        img.src = reader.result as string;
-      };
-
-      reader.onerror = () => reject(new Error('Failed to read image file'));
-      reader.readAsDataURL(inputFile);
-    });
-  };
-
-  const preprocessWords = (words: OCRWord[]): PreparedWord[] => {
-    return words
-      .filter((word) => word.text && word.text.trim().length > 0 && word.bbox)
-      .map((word) => ({
-        text: word.text.trim(),
-        x0: word.bbox!.x0,
-        y0: word.bbox!.y0,
-        x1: word.bbox!.x1,
-        y1: word.bbox!.y1,
-        centerX: (word.bbox!.x0 + word.bbox!.x1) / 2,
-        centerY: (word.bbox!.y0 + word.bbox!.y1) / 2,
-      }));
-  };
-
-  const groupWordsIntoRows = (words: PreparedWord[], yTolerance = 18): PreparedWord[][] => {
-    const sorted = [...words].sort((a, b) => {
-      const yDiff = a.centerY - b.centerY;
-      if (Math.abs(yDiff) > 1) return yDiff;
-      return a.x0 - b.x0;
-    });
-
-    const rows: PreparedWord[][] = [];
-
-    for (const word of sorted) {
-      let bestRowIndex = -1;
-      let bestDistance = Infinity;
-
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const avgY = row.reduce((sum, item) => sum + item.centerY, 0) / row.length;
-        const distance = Math.abs(avgY - word.centerY);
-
-        if (distance <= yTolerance && distance < bestDistance) {
-          bestDistance = distance;
-          bestRowIndex = i;
-        }
-      }
-
-      if (bestRowIndex >= 0) {
-        rows[bestRowIndex].push(word);
-      } else {
-        rows.push([word]);
-      }
-    }
-
-    return rows
-      .map((row) => [...row].sort((a, b) => a.x0 - b.x0))
-      .sort((a, b) => {
-        const avgA = a.reduce((sum, item) => sum + item.centerY, 0) / a.length;
-        const avgB = b.reduce((sum, item) => sum + item.centerY, 0) / b.length;
-        return avgA - avgB;
-      });
-  };
-
-  const inferColumnAnchors = (rows: PreparedWord[][], xTolerance = 45): number[] => {
-    const anchors: number[] = [];
-
-    for (const row of rows) {
-      for (const word of row) {
-        const existingIndex = anchors.findIndex(
-          (anchor) => Math.abs(anchor - word.x0) <= xTolerance
-        );
-
-        if (existingIndex >= 0) {
-          anchors[existingIndex] = Math.round((anchors[existingIndex] + word.x0) / 2);
-        } else {
-          anchors.push(word.x0);
-        }
-      }
-    }
-
-    return anchors.sort((a, b) => a - b);
-  };
-
-  const assignWordsToColumns = (rows: PreparedWord[][], anchors: number[]) => {
-    if (anchors.length === 0) {
-      return {
-        tableData: [] as Record<string, string>[],
-        columnNames: ['Text'],
-      };
-    }
-
-    const columnNames = anchors.map((_, index) => `Column ${index + 1}`);
-
-    const tableData = rows.map((row) => {
-      const cells = Array.from({ length: anchors.length }, () => '');
-
-      for (const word of row) {
-        let bestIndex = 0;
-        let bestDistance = Math.abs(word.x0 - anchors[0]);
-
-        for (let i = 1; i < anchors.length; i++) {
-          const distance = Math.abs(word.x0 - anchors[i]);
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestIndex = i;
-          }
-        }
-
-        cells[bestIndex] = cells[bestIndex]
-          ? `${cells[bestIndex]} ${word.text}`
-          : word.text;
-      }
-
-      const rowObject: Record<string, string> = {};
-      columnNames.forEach((col, idx) => {
-        rowObject[col] = cells[idx] ?? '';
-      });
-
-      return rowObject;
-    });
-
-    return { tableData, columnNames };
-  };
-
-  const fallbackTextToTable = (text: string) => {
-    const lines = text
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (lines.length === 0) {
-      return {
-        tableData: [] as Record<string, string>[],
-        columnNames: ['Text'],
-      };
-    }
-
-    return {
-      tableData: lines.map((line) => ({ Text: line })),
-      columnNames: ['Text'],
-    };
-  };
-
-//debugging purpose since the OCR call is being made but 401 issue is seen
-
-const processOCR = async () => {
-  if (!file || !user) return;
-
-  setLoading(true);
-  setOcrStatus('Uploading image for OCR...');
-
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch(
-      'https://nmuiueuoolvkssueutyq.supabase.co/functions/v1/ocr-extract',
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
-
-    const text = await response.text();
-    console.log('RAW FUNCTION RESPONSE:', text);
-    alert(text);
-
-    setOcrStatus('Debug response received');
-  } catch (error) {
-    console.error('OCR Error:', error);
-    alert(
-      `Error processing image: ${
-        error instanceof Error ? error.message : JSON.stringify(error)
-      }`
-    );
-    setOcrStatus('OCR failed');
-  } finally {
-    setLoading(false);
+const response = await fetch(
+  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
+  {
+    method: 'POST',
+    headers,
+    body: formData,
   }
-};
+);
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        console.error('OCR function failed:', response.status, responseText);
+        alert(`OCR failed (${response.status}): ${responseText}`);
+        setOcrStatus('OCR failed');
+        return;
+      }
+
+      const result = JSON.parse(responseText);
+
+      const columnNames = Array.isArray(result?.columnNames) ? result.columnNames : ['Text'];
+      const tableData = Array.isArray(result?.tableData) ? result.tableData : [];
+      const rawText = typeof result?.rawText === 'string' ? result.rawText : '';
+      const confidence = typeof result?.confidence === 'number' ? result.confidence : 0;
+
+      const autoTags = detectTags(rawText, columnNames);
+
+      setExtractedData({
+        tableData,
+        columnNames,
+        autoTags,
+        confidence,
+        rawText,
+      });
+
+      setOcrStatus('OCR complete');
+    } catch (error) {
+      console.error('OCR Error:', error);
+      alert(
+        `Error processing image: ${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`
+      );
+      setOcrStatus('OCR failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const saveTable = async () => {
     if (!extractedData || !user) return;
@@ -371,7 +196,7 @@ const processOCR = async () => {
             <h2 className="text-xl font-bold text-gray-900 mb-4">Photo Upload</h2>
 
             <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
-              OCR languages: <span className="font-semibold">English + Japanese</span>
+              OCR languages: <span className="font-semibold">Auto-detect</span>
             </div>
 
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer">
@@ -389,7 +214,7 @@ const processOCR = async () => {
                   <div>
                     <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-2">Click to upload an image</p>
-                    <p className="text-sm text-gray-400">PNG, JPG up to 10MB</p>
+                    <p className="text-sm text-gray-400">PNG, JPG, WEBP up to 10MB</p>
                   </div>
                 )}
               </label>
