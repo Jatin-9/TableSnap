@@ -76,76 +76,81 @@ export default function UploadPage() {
   };
 
   const processOCR = async () => {
-    if (!file || !user) return;
+  if (!file || !user) return;
 
-    setLoading(true);
-    setOcrStatus('Uploading image for OCR...');
+  setLoading(true);
+  setOcrStatus('Uploading image for OCR...');
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
 
-//trying to resolve the JWT auth issue in supabase
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
 
-      const { data: sessionData } = await supabase.auth.getSession()
-const accessToken = sessionData.session?.access_token
+    console.log('ACCESS TOKEN:', accessToken);
 
-const headers: Record<string, string> = {
-  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-}
-
-if (accessToken) {
-  headers['Authorization'] = `Bearer ${accessToken}`
-}
-
-const response = await fetch(
-  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
-  {
-    method: 'POST',
-    headers,
-    body: formData,
-  }
-);
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        console.error('OCR function failed:', response.status, responseText);
-        alert(`OCR failed (${response.status}): ${responseText}`);
-        setOcrStatus('OCR failed');
-        return;
-      }
-
-      const result = JSON.parse(responseText);
-
-      const columnNames = Array.isArray(result?.columnNames) ? result.columnNames : ['Text'];
-      const tableData = Array.isArray(result?.tableData) ? result.tableData : [];
-      const rawText = typeof result?.rawText === 'string' ? result.rawText : '';
-      const confidence = typeof result?.confidence === 'number' ? result.confidence : 0;
-
-      const autoTags = detectTags(rawText, columnNames);
-
-      setExtractedData({
-        tableData,
-        columnNames,
-        autoTags,
-        confidence,
-        rawText,
-      });
-
-      setOcrStatus('OCR complete');
-    } catch (error) {
-      console.error('OCR Error:', error);
-      alert(
-        `Error processing image: ${
-          error instanceof Error ? error.message : JSON.stringify(error)
-        }`
-      );
+    if (!accessToken) {
+      alert('No access token found. Please sign out and sign in again.');
       setOcrStatus('OCR failed');
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    const headers: Record<string, string> = {
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    };
+
+    console.log('FINAL HEADERS:', headers);
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
+      {
+        method: 'POST',
+        headers,
+        body: formData,
+      }
+    );
+
+    const responseText = await response.text();
+    console.log('OCR raw response:', response.status, responseText);
+
+    if (!response.ok) {
+      alert(`OCR failed (${response.status}): ${responseText}`);
+      setOcrStatus('OCR failed');
+      return;
+    }
+
+    const result = JSON.parse(responseText);
+
+    const columnNames = Array.isArray(result?.columnNames) ? result.columnNames : ['Text'];
+    const tableData = Array.isArray(result?.tableData) ? result.tableData : [];
+    const rawText = typeof result?.rawText === 'string' ? result.rawText : '';
+    const confidence = typeof result?.confidence === 'number' ? result.confidence : 0;
+
+    const autoTags = detectTags(rawText, columnNames);
+
+    setExtractedData({
+      tableData,
+      columnNames,
+      autoTags,
+      confidence,
+      rawText,
+    });
+
+    setOcrStatus('OCR complete');
+  } catch (error) {
+    console.error('OCR Error:', error);
+    alert(
+      `Error processing image: ${
+        error instanceof Error ? error.message : JSON.stringify(error)
+      }`
+    );
+    setOcrStatus('OCR failed');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const saveTable = async () => {
     if (!extractedData || !user) return;
