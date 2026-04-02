@@ -99,7 +99,7 @@ export default function UploadPage() {
     const headers: Record<string, string> = {
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       Authorization: `Bearer ${accessToken}`,
-    };
+    }; 
 
     console.log('FINAL HEADERS:', headers);
 

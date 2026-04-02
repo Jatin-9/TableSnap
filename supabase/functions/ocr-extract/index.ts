@@ -195,6 +195,107 @@ function compressSparseColumns(
   }
 }
 
+function getLineTexts(parsedResults: OCRSpaceResponse['ParsedResults']) {
+  const lines: string[] = []
+
+  for (const result of parsedResults ?? []) {
+    for (const line of result.TextOverlay?.Lines ?? []) {
+      const text = (line.LineText ?? '').trim()
+      if (text) lines.push(text)
+    }
+  }
+
+  return lines
+}
+
+function looksLikeReceipt(lines: string[]) {
+  const signals = [
+    /subtotal/i,
+    /\btotal\b/i,
+    /\btax\b/i,
+    /\bvisa\b/i,
+    /\bdebit\b/i,
+    /\bchange due\b/i,
+    /\bapproval\b/i,
+  ]
+
+  let matches = 0
+  for (const line of lines) {
+    if (signals.some((re) => re.test(line))) matches++
+  }
+
+  return matches >= 2
+}
+
+function parseReceiptLines(lines: string[]) {
+  const rows: Record<string, string>[] = []
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) continue
+
+    // Skip obvious header/footer noise
+    if (
+      /walmart/i.test(line) ||
+      /save money/i.test(line) ||
+      /manager/i.test(line) ||
+      /new philadelphia/i.test(line) ||
+      /customer copy/i.test(line)
+    ) {
+      continue
+    }
+
+    // Match receipt-like line items:
+    // DESCRIPTION   SKU(optional)   PRICE   FLAG(optional)
+    const m = line.match(
+      /^(.*?)(?:\s+(\d{6,14}[A-Z]?))?(?:\s+([0-9]+\.[0-9]{2}))(?:\s+([A-Z]))?$/
+    )
+
+    if (m) {
+      const description = (m[1] ?? '').trim()
+      const code = (m[2] ?? '').trim()
+      const price = (m[3] ?? '').trim()
+      const flag = (m[4] ?? '').trim()
+
+      if (description && price) {
+        rows.push({
+          Item: description,
+          Code: code,
+          Price: price,
+          Flag: flag,
+        })
+        continue
+      }
+    }
+
+    // Totals / summary lines
+    const totalish = line.match(/^(subtotal|tax|total|change due)\s+([0-9]+\.[0-9]{2})$/i)
+    if (totalish) {
+      rows.push({
+        Item: totalish[1],
+        Code: '',
+        Price: totalish[2],
+        Flag: '',
+      })
+      continue
+    }
+  }
+
+  const usefulRows = rows.filter((r) => r.Item || r.Price)
+
+  if (usefulRows.length === 0) {
+    return {
+      tableData: lines.map((line) => ({ Text: line })),
+      columnNames: ['Text'],
+    }
+  }
+
+  return {
+    tableData: usefulRows,
+    columnNames: ['Item', 'Code', 'Price', 'Flag'],
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -232,6 +333,7 @@ Deno.serve(async (req) => {
     upstreamForm.append('apikey', apiKey)
     upstreamForm.append('language', 'auto')
     upstreamForm.append('isOverlayRequired', 'true')
+    upstreamForm.append('isTable', 'true')
     upstreamForm.append('OCREngine', '2')
     upstreamForm.append('scale', 'true')
     upstreamForm.append('detectOrientation', 'true')
@@ -267,6 +369,26 @@ Deno.serve(async (req) => {
       .join('\n')
       .trim()
 
+    const lineTexts = getLineTexts(parsedResults)
+
+    // Receipt-first parsing
+    if (looksLikeReceipt(lineTexts)) {
+      const parsedReceipt = parseReceiptLines(lineTexts)
+      return new Response(
+        JSON.stringify({
+          rawText,
+          confidence: 0,
+          columnNames: parsedReceipt.columnNames,
+          tableData: parsedReceipt.tableData,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Generic table fallback
     const preparedWords: PreparedWord[] = []
 
     for (const result of parsedResults) {
