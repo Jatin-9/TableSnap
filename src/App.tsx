@@ -9,9 +9,11 @@ import AnalyticsPage from './components/Dashboard/AnalyticsPage';
 import RemindersPage from './components/Dashboard/RemindersPage';
 import SettingsPage from './components/Dashboard/SettingsPage';
 import SuperAdminPage from './components/SuperAdmin/SuperAdminPage';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -55,6 +57,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 
