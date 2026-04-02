@@ -187,8 +187,8 @@ const rowsAddedData = {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My Analytics</h1>
-          <p className="text-gray-600">Track your personal usage and productivity</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">My Analytics</h1>
+          <p className="text-gray-600 dark:text-blue-500">Track your personal usage and productivity</p>
         </div>
         <button
           onClick={exportAnalytics}
@@ -226,8 +226,8 @@ const rowsAddedData = {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Tables Created (Last 30 Days)</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900 ">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">Tables Created (Last 30 Days)</h2>
           <Line
             data={tablesCreatedData}
             options={{
@@ -242,8 +242,8 @@ const rowsAddedData = {
           />
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Rows Added (Last 7 Days)</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">Rows Added (Last 7 Days)</h2>
           <Bar
             data={rowsAddedData}
             options={{
@@ -260,8 +260,8 @@ const rowsAddedData = {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Tables by Tag</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">Tables by Tag</h2>
           <div className="max-w-sm mx-auto">
             <Pie
               data={tagUsageData}
@@ -275,8 +275,8 @@ const rowsAddedData = {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Tag Distribution</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">Tag Distribution</h2>
           <div className="max-w-sm mx-auto">
             <Doughnut
               data={tagUsageData}

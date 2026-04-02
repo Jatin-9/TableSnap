@@ -189,10 +189,10 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Upload Table Image</h1>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 p-6 dark:bg-gray-900">
+      <div className="max-w-6xl mx-auto dark:bg-gray-900">
+        <div className="mb-8 ">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">Upload Table Image</h1>
           <p className="text-gray-600">Upload a photo of any table and extract data using OCR</p>
         </div>
 

@@ -26,38 +26,39 @@ export default function SettingsPage() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Manage your account preferences</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">Settings</h1>
+        <p className="text-gray-600 dark:text-blue-500">Manage your account preferences</p>
       </div>
 
       <div className="grid gap-6 max-w-4xl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <User className="w-6 h-6 text-blue-600" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Account Information</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Account Information</h2>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
                 Email
               </label>
               <input
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-gray-700 dark:text-gray-300"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
+
                 Role
               </label>
               <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-gray-400" />
+                <Shield className="w-5 h-5 text-gray-400 fill-green-500" />
                 <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium capitalize">
                   {user?.role}
                 </span>
@@ -65,7 +66,7 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
                 Member Since
               </label>
               <input
@@ -76,25 +77,25 @@ export default function SettingsPage() {
                   day: 'numeric',
                 })}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-gray-700 dark:text-gray-300"
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <SettingsIcon className="w-6 h-6 text-green-600" />
+              <SettingsIcon className="w-6 h-6 text-green-700" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Preferences</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Preferences</h2>
           </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Auto-tag Tables</p>
-                <p className="text-sm text-gray-500">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
+              <div >
+                <p className="font-medium text-gray-900 dark:text-gray-300">Auto-tag Tables</p>
+                <p className="text-sm text-gray-500 dark:text-blue-500">
                   Automatically detect and tag table content
                 </p>
               </div>
@@ -108,10 +109,10 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
               <div>
-                <p className="font-medium text-gray-900">Email Notifications</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-gray-900 dark:text-gray-300">Email Notifications</p>
+                <p className="text-sm text-gray-500 dark:text-blue-500">
                   Receive updates via email
                 </p>
               </div>
@@ -128,10 +129,10 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
               <div>
-                <p className="font-medium text-gray-900">Show Confidence Scores</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-gray-900 dark:text-gray-300">Show Confidence Scores</p>
+                <p className="text-sm text-gray-500 dark:text-blue-500">
                   Display OCR confidence in table list
                 </p>
               </div>

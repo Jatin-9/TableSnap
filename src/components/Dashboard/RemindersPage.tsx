@@ -68,15 +68,15 @@ export default function RemindersPage() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Reminders</h1>
-        <p className="text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">Reminders</h1>
+        <p className="text-gray-600 dark:text-blue-500">
           Get reminded to review random rows from your tables
         </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 dark:bg-gray-900">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Your Reminders</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Your Reminders</h2>
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
