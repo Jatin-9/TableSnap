@@ -10,6 +10,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -18,10 +19,11 @@ import { supabase } from '../../lib/supabase';
 
 export default function Sidebar() {
   const { user, signOut, isSuperAdmin } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [savingTheme, setSavingTheme] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -30,10 +32,17 @@ export default function Sidebar() {
   }, [user]);
 
   const fetchPopularTags = async () => {
-    const { data } = await supabase
+    if (!user) return;
+
+    const { data, error } = await supabase
       .from('table_snapshots')
       .select('auto_tags')
-      .eq('user_id', user!.id);
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error fetching popular tags:', error);
+      return;
+    }
 
     if (data) {
       const tagCounts: Record<string, number> = {};
@@ -55,6 +64,31 @@ export default function Sidebar() {
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const handleThemeToggle = async () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+
+    setTheme(nextTheme);
+
+    if (!user) return;
+
+    try {
+      setSavingTheme(true);
+
+      const { error } = await supabase
+        .from('users')
+        .update({ themeCheck: nextTheme })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error saving theme to database:', error);
+      }
+    } catch (error) {
+      console.error('Unexpected error saving theme:', error);
+    } finally {
+      setSavingTheme(false);
+    }
   };
 
   const navItems = [
@@ -132,6 +166,7 @@ export default function Sidebar() {
                 Popular Tags
               </span>
             </div>
+
             <div className="flex flex-wrap gap-2 px-4">
               {tags.map((tag) => (
                 <span
@@ -149,12 +184,24 @@ export default function Sidebar() {
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
         <button
-          onClick={toggleTheme}
-          className="flex items-center gap-3 px-4 py-3 w-full text-gray-700 hover:bg-gray-50 rounded-lg transition-colors dark:text-gray-200 dark:hover:bg-gray-800"
+          onClick={handleThemeToggle}
+          disabled={savingTheme}
+          className="flex items-center gap-3 px-4 py-3 w-full text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed dark:text-gray-200 dark:hover:bg-gray-800"
         >
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {savingTheme ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : theme === 'dark' ? (
+            <Sun className="w-5 h-5" />
+          ) : (
+            <Moon className="w-5 h-5" />
+          )}
+
           <span className="font-medium">
-            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            {savingTheme
+              ? 'Saving theme...'
+              : theme === 'dark'
+              ? 'Light Mode'
+              : 'Dark Mode'}
           </span>
         </button>
 

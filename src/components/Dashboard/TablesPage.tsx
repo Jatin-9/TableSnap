@@ -122,8 +122,8 @@ export default function TablesPage() {
           <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filteredSnapshots.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <p className="text-gray-500">No tables found. Upload your first table image!</p>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center dark:bg-gray-900">
+          <p className="text-gray-500 ">No tables found. Upload your first table image!</p>
         </div>
       ) : (
         <div className="grid gap-4">
