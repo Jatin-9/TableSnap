@@ -42,6 +42,14 @@ export default function UploadPage() {
     reader.readAsDataURL(selectedFile);
   };
 
+  const fileToBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+    });
+
   const detectTags = (text: string, columns: string[]): string[] => {
     const tags: string[] = [];
     const lowerText = text.toLowerCase();
@@ -76,81 +84,102 @@ export default function UploadPage() {
   };
 
   const processOCR = async () => {
-  if (!file || !user) return;
+    if (!file || !user) return;
 
-  setLoading(true);
-  setOcrStatus('Uploading image for OCR...');
+    setLoading(true);
+    setOcrStatus('Uploading image for AI extraction...');
 
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
+    try {
+      const imageBase64 = await fileToBase64(file);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
-    console.log('ACCESS TOKEN:', accessToken);
-
-    if (!accessToken) {
-      alert('No access token found. Please sign out and sign in again.');
-      setOcrStatus('OCR failed');
-      return;
-    }
-
-    const headers: Record<string, string> = {
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${accessToken}`,
-    }; 
-
-    console.log('FINAL HEADERS:', headers);
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
-      {
-        method: 'POST',
-        headers,
-        body: formData,
+      if (!accessToken) {
+        alert('No access token found. Please sign out and sign in again.');
+        setOcrStatus('OCR failed');
+        return;
       }
-    );
 
-    const responseText = await response.text();
-    console.log('OCR raw response:', response.status, responseText);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            imageBase64,
+          }),
+        }
+      );
 
-    if (!response.ok) {
-      alert(`OCR failed (${response.status}): ${responseText}`);
+      const responseText = await response.text();
+      console.log('OCR raw response:', response.status, responseText);
+
+      if (!response.ok) {
+        alert(`OCR failed (${response.status}): ${responseText}`);
+        setOcrStatus('OCR failed');
+        return;
+      }
+
+      const result = JSON.parse(responseText);
+
+      if (!result?.result) {
+        alert('No result returned from AI');
+        setOcrStatus('OCR failed');
+        return;
+      }
+
+      const cleaned = result.result.replace(/```json|```/g, '').trim();
+
+      let parsed: { columns?: string[]; rows?: Record<string, string>[] };
+
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (parseError) {
+        console.error('Failed to parse AI JSON:', cleaned);
+        alert('AI returned invalid JSON. Check console for details.');
+        setOcrStatus('OCR failed');
+        return;
+      }
+
+      const columnNames =
+        Array.isArray(parsed.columns) && parsed.columns.length > 0
+          ? parsed.columns
+          : ['Text'];
+
+      const tableData =
+        Array.isArray(parsed.rows) && parsed.rows.length > 0
+          ? parsed.rows
+          : [];
+
+      const rawText = JSON.stringify(parsed, null, 2);
+      const autoTags = detectTags(rawText, columnNames);
+
+      setExtractedData({
+        tableData,
+        columnNames,
+        autoTags,
+        confidence: 90,
+        rawText,
+      });
+
+      setOcrStatus('AI extraction complete');
+    } catch (error) {
+      console.error('OCR Error:', error);
+      alert(
+        `Error processing image: ${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`
+      );
       setOcrStatus('OCR failed');
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    const result = JSON.parse(responseText);
-
-    const columnNames = Array.isArray(result?.columnNames) ? result.columnNames : ['Text'];
-    const tableData = Array.isArray(result?.tableData) ? result.tableData : [];
-    const rawText = typeof result?.rawText === 'string' ? result.rawText : '';
-    const confidence = typeof result?.confidence === 'number' ? result.confidence : 0;
-
-    const autoTags = detectTags(rawText, columnNames);
-
-    setExtractedData({
-      tableData,
-      columnNames,
-      autoTags,
-      confidence,
-      rawText,
-    });
-
-    setOcrStatus('OCR complete');
-  } catch (error) {
-    console.error('OCR Error:', error);
-    alert(
-      `Error processing image: ${
-        error instanceof Error ? error.message : JSON.stringify(error)
-      }`
-    );
-    setOcrStatus('OCR failed');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const saveTable = async () => {
     if (!extractedData || !user) return;
@@ -193,7 +222,7 @@ export default function UploadPage() {
       <div className="max-w-6xl mx-auto dark:bg-gray-900">
         <div className="mb-8 ">
           <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">Upload Table Image</h1>
-          <p className="text-gray-600">Upload a photo of any table and extract data using OCR</p>
+          <p className="text-gray-600">Upload a photo of any table and extract data using AI</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -201,7 +230,7 @@ export default function UploadPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-4">Photo Upload</h2>
 
             <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
-              OCR languages: <span className="font-semibold">Auto-detect</span>
+              Extraction mode: <span className="font-semibold">OpenAI Vision</span>
             </div>
 
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer">
@@ -258,7 +287,7 @@ export default function UploadPage() {
 
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">OCR Confidence</span>
+                  <span className="text-sm font-medium text-gray-700">Extraction Confidence</span>
                   <span className="text-sm font-bold text-green-600">
                     {extractedData.confidence}%
                   </span>
@@ -310,7 +339,7 @@ export default function UploadPage() {
                     ) : (
                       <tr>
                         <td className="p-2 text-gray-500" colSpan={extractedData.columnNames.length}>
-                          No text could be extracted from this image.
+                          No table could be extracted from this image.
                         </td>
                       </tr>
                     )}
@@ -320,7 +349,7 @@ export default function UploadPage() {
 
               <details className="mb-4">
                 <summary className="cursor-pointer text-sm font-medium text-gray-700">
-                  View raw OCR text
+                  View raw AI output
                 </summary>
                 <pre className="mt-2 whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded-lg border border-gray-200 overflow-auto max-h-48">
                   {extractedData.rawText}

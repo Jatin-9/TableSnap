@@ -5,14 +5,34 @@ const openai = new OpenAI({
   apiKey: Deno.env.get("OPENAI_API_KEY"),
 });
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 Deno.serve(async (req) => {
+  // Handle browser preflight request
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: corsHeaders,
+    });
+  }
+
   try {
     const { imageBase64 } = await req.json();
 
     if (!imageBase64) {
-      return new Response(JSON.stringify({ error: "No image provided" }), {
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ error: "No image provided" }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
     }
 
     const response = await openai.responses.create({
@@ -24,18 +44,25 @@ Deno.serve(async (req) => {
             {
               type: "input_text",
               text: `
-Extract table data from this image.
+Extract structured table-like data from this image.
 
 Return ONLY valid JSON in this format:
 
 {
-  "columns": ["col1", "col2"],
-  "rows": [
-    {"col1": "value", "col2": "value"}
-  ]
+  "columns": [],
+  "rows": []
 }
 
-Do NOT include explanation.
+Rules:
+- Detect the number of columns automatically.
+- Use visible headers when present.
+- If headers are missing, infer short sensible column names.
+- Preserve all text in its original language and script.
+- Do not translate or normalize names.
+- Support mixed-language content in the same row.
+- Keep row relationships correct.
+- If the image is not a strict table, still return the best structured rows-and-columns representation possible.
+- Return JSON only, no markdown.
               `,
             },
             {
@@ -49,14 +76,27 @@ Do NOT include explanation.
 
     return new Response(
       JSON.stringify({ result: response.output_text }),
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   } catch (error) {
-    console.error(error);
+    console.error("OCR function error:", error);
 
     return new Response(
-      JSON.stringify({ error: "OCR failed" }),
-      { status: 500 }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "OCR failed",
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 });
