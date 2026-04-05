@@ -150,9 +150,23 @@ export default function UploadPage() {
           : ['Text'];
 
       const tableData =
-        Array.isArray(parsed.rows) && parsed.rows.length > 0
-          ? parsed.rows
-          : [];
+  Array.isArray(parsed.rows) && parsed.rows.length > 0
+    ? parsed.rows.map((row) => {
+        const normalizedRow: Record<string, string> = {};
+
+        columnNames.forEach((col, index) => {
+          if (row[col] !== undefined) {
+            normalizedRow[col] = String(row[col]);
+            return;
+          }
+
+          const rowValues = Object.values(row);
+          normalizedRow[col] = rowValues[index] !== undefined ? String(rowValues[index]) : '';
+        });
+
+        return normalizedRow;
+      })
+    : [];
 
       const rawText = JSON.stringify(parsed, null, 2);
       const autoTags = detectTags(rawText, columnNames);

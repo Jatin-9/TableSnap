@@ -46,24 +46,29 @@ Deno.serve(async (req) => {
               text: `
 Extract structured table-like data from this image.
 
-Return ONLY valid JSON in this format:
+Return ONLY valid JSON in this exact format:
 
 {
-  "columns": [],
-  "rows": []
+  "columns": ["Column A", "Column B", "Column C"],
+  "rows": [
+    {
+      "Column A": "value",
+      "Column B": "value",
+      "Column C": "value"
+    }
+  ]
 }
 
 Rules:
 - Detect the number of columns automatically.
-- Use visible headers when present.
-- If headers are missing, infer short sensible column names.
-- Preserve all text in its original language and script.
-- Do not translate or normalize names.
-- Support mixed-language content in the same row.
-- Keep row relationships correct.
-- If the image is not a strict table, still return the best structured rows-and-columns representation possible.
-- Return JSON only, no markdown.
-              `,
+- Use real visible headers when present.
+- If headers are not visible, infer short sensible header names.
+- Every row object MUST use exactly the same keys as the strings in "columns".
+- Do not use example values as keys.
+- Do not translate.
+- Preserve original language and script.
+- Return JSON only, no markdown, no explanation.
+`,
             },
             {
               type: "input_image",
