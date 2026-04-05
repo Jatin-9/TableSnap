@@ -42,6 +42,9 @@ export default function UploadPage() {
     reader.readAsDataURL(selectedFile);
   };
 
+  // CHANGE 1:
+  // Added helper to convert uploaded image into base64
+  // because the OpenAI edge function expects JSON with imageBase64.
   const fileToBase64 = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -92,15 +95,9 @@ export default function UploadPage() {
     try {
       const imageBase64 = await fileToBase64(file);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-
-      if (!accessToken) {
-        alert('No access token found. Please sign out and sign in again.');
-        setOcrStatus('OCR failed');
-        return;
-      }
-
+      // CHANGE 2:
+      // If JWT verification is disabled in the edge function,
+      // only apikey + content-type are needed here.
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
         {
@@ -108,7 +105,6 @@ export default function UploadPage() {
           headers: {
             'Content-Type': 'application/json',
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             imageBase64,
@@ -133,6 +129,8 @@ export default function UploadPage() {
         return;
       }
 
+      // CHANGE 3:
+      // Strip markdown fences if AI wraps JSON in ```json ... ```
       const cleaned = result.result.replace(/```json|```/g, '').trim();
 
       let parsed: { columns?: string[]; rows?: Record<string, string>[] };
@@ -218,22 +216,32 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 p-6 dark:bg-gray-900">
-      <div className="max-w-6xl mx-auto dark:bg-gray-900">
-        <div className="mb-8 ">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">Upload Table Image</h1>
-          <p className="text-gray-600">Upload a photo of any table and extract data using AI</p>
+    // CHANGE 4:
+    // Improved dark mode on page background by changing gradient stops too.
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">
+            Upload Table Image
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            Upload a photo of any table and extract data using AI
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Photo Upload</h2>
+          {/* CHANGE 5:
+              Upload card now has proper dark background + border */}
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 dark:text-white">
+              Photo Upload
+            </h2>
 
-            <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
+            <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
               Extraction mode: <span className="font-semibold">OpenAI Vision</span>
             </div>
 
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer">
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer dark:border-gray-700 dark:hover:border-blue-500">
               <input
                 type="file"
                 accept="image/*"
@@ -246,9 +254,13 @@ export default function UploadPage() {
                   <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
                 ) : (
                   <div>
-                    <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">Click to upload an image</p>
-                    <p className="text-sm text-gray-400">PNG, JPG, WEBP up to 10MB</p>
+                    <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4 dark:text-gray-500" />
+                    <p className="text-gray-600 mb-2 dark:text-gray-300">
+                      Click to upload an image
+                    </p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">
+                      PNG, JPG, WEBP up to 10MB
+                    </p>
                   </div>
                 )}
               </label>
@@ -275,24 +287,30 @@ export default function UploadPage() {
             )}
 
             {ocrStatus && (
-              <div className="mt-4 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="mt-4 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
                 {ocrStatus}
               </div>
             )}
           </div>
 
           {extractedData && (
-            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Extracted Data</h2>
+            // CHANGE 6:
+            // Extracted data card fully updated for dark mode.
+            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 dark:text-white">
+                Extracted Data
+              </h2>
 
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Extraction Confidence</span>
-                  <span className="text-sm font-bold text-green-600">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Extraction Confidence
+                  </span>
+                  <span className="text-sm font-bold text-green-600 dark:text-green-400">
                     {extractedData.confidence}%
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                   <div
                     className="bg-green-500 h-2 rounded-full"
                     style={{ width: `${Math.min(extractedData.confidence, 100)}%` }}
@@ -301,12 +319,14 @@ export default function UploadPage() {
               </div>
 
               <div className="mb-4">
-                <span className="text-sm font-medium text-gray-700 mb-2 block">Auto Tags</span>
+                <span className="text-sm font-medium text-gray-700 mb-2 block dark:text-gray-300">
+                  Auto Tags
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {extractedData.autoTags.map((tag) => (
                     <span
                       key={tag}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium dark:bg-blue-900/30 dark:text-blue-300"
                     >
                       {tag}
                     </span>
@@ -314,12 +334,18 @@ export default function UploadPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto mb-4">
-                <table className="w-full text-sm">
+              {/* CHANGE 7:
+                  Table wrapper, headers, and cells now have explicit light/dark colors
+                  so text does not become invisible. */}
+              <div className="overflow-x-auto mb-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm bg-white dark:bg-gray-900">
                   <thead>
-                    <tr className="border-b border-gray-200">
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
                       {extractedData.columnNames.map((col) => (
-                        <th key={col} className="text-left p-2 font-semibold text-gray-900">
+                        <th
+                          key={col}
+                          className="text-left p-2 font-semibold text-gray-900 dark:text-white bg-white dark:bg-gray-900"
+                        >
                           {col}
                         </th>
                       ))}
@@ -328,9 +354,12 @@ export default function UploadPage() {
                   <tbody>
                     {extractedData.tableData.length > 0 ? (
                       extractedData.tableData.map((row, idx) => (
-                        <tr key={idx} className="border-b border-gray-100">
+                        <tr key={idx} className="border-b border-gray-100 dark:border-gray-800">
                           {extractedData.columnNames.map((col) => (
-                            <td key={col} className="p-2 text-gray-700">
+                            <td
+                              key={col}
+                              className="p-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900"
+                            >
                               {row[col] ?? ''}
                             </td>
                           ))}
@@ -338,7 +367,10 @@ export default function UploadPage() {
                       ))
                     ) : (
                       <tr>
-                        <td className="p-2 text-gray-500" colSpan={extractedData.columnNames.length}>
+                        <td
+                          className="p-2 text-gray-500 dark:text-gray-400"
+                          colSpan={extractedData.columnNames.length}
+                        >
                           No table could be extracted from this image.
                         </td>
                       </tr>
@@ -347,11 +379,13 @@ export default function UploadPage() {
                 </table>
               </div>
 
+              {/* CHANGE 8:
+                  Raw AI output area now also has explicit dark mode text/background colors. */}
               <details className="mb-4">
-                <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
                   View raw AI output
                 </summary>
-                <pre className="mt-2 whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded-lg border border-gray-200 overflow-auto max-h-48">
+                <pre className="mt-2 whitespace-pre-wrap text-xs bg-gray-50 text-gray-900 p-3 rounded-lg border border-gray-200 overflow-auto max-h-48 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
                   {extractedData.rawText}
                 </pre>
               </details>
