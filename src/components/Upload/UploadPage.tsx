@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Upload, Image as ImageIcon, Loader2, X } from 'lucide-react'; // CHANGE: added X icon for close button
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+
+// CHANGE: UploadPage now accepts callbacks from parent modal/layout
+type UploadPageProps = {
+  onSaved?: () => void;
+  onClose?: () => void;
+};
 
 type ExtractedData = {
   tableData: Record<string, string>[];
@@ -12,15 +17,23 @@ type ExtractedData = {
   rawText: string;
 };
 
-export default function UploadPage() {
+// CHANGE: receive onSaved and onClose props
+export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('');
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
 
-  const navigate = useNavigate();
   const { user } = useAuth();
+
+  // CHANGE: helper to fully reset upload UI after save/cancel
+  const resetUploadState = () => {
+    setFile(null);
+    setPreview(null);
+    setExtractedData(null);
+    setOcrStatus('');
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] ?? null;
@@ -42,9 +55,6 @@ export default function UploadPage() {
     reader.readAsDataURL(selectedFile);
   };
 
-  // CHANGE 1:
-  // Added helper to convert uploaded image into base64
-  // because the OpenAI edge function expects JSON with imageBase64.
   const fileToBase64 = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -95,9 +105,6 @@ export default function UploadPage() {
     try {
       const imageBase64 = await fileToBase64(file);
 
-      // CHANGE 2:
-      // If JWT verification is disabled in the edge function,
-      // only apikey + content-type are needed here.
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
         {
@@ -129,8 +136,6 @@ export default function UploadPage() {
         return;
       }
 
-      // CHANGE 3:
-      // Strip markdown fences if AI wraps JSON in ```json ... ```
       const cleaned = result.result.replace(/```json|```/g, '').trim();
 
       let parsed: { columns?: string[]; rows?: Record<string, string>[] };
@@ -150,23 +155,23 @@ export default function UploadPage() {
           : ['Text'];
 
       const tableData =
-  Array.isArray(parsed.rows) && parsed.rows.length > 0
-    ? parsed.rows.map((row) => {
-        const normalizedRow: Record<string, string> = {};
+        Array.isArray(parsed.rows) && parsed.rows.length > 0
+          ? parsed.rows.map((row) => {
+              const normalizedRow: Record<string, string> = {};
 
-        columnNames.forEach((col, index) => {
-          if (row[col] !== undefined) {
-            normalizedRow[col] = String(row[col]);
-            return;
-          }
+              columnNames.forEach((col, index) => {
+                if (row[col] !== undefined) {
+                  normalizedRow[col] = String(row[col]);
+                  return;
+                }
 
-          const rowValues = Object.values(row);
-          normalizedRow[col] = rowValues[index] !== undefined ? String(rowValues[index]) : '';
-        });
+                const rowValues = Object.values(row);
+                normalizedRow[col] = rowValues[index] !== undefined ? String(rowValues[index]) : '';
+              });
 
-        return normalizedRow;
-      })
-    : [];
+              return normalizedRow;
+            })
+          : [];
 
       const rawText = JSON.stringify(parsed, null, 2);
       const autoTags = detectTags(rawText, columnNames);
@@ -216,7 +221,9 @@ export default function UploadPage() {
         throw error;
       }
 
-      navigate('/dashboard');
+      // CHANGE: instead of navigate('/dashboard'), reset and notify parent
+      resetUploadState();
+      onSaved?.();
     } catch (error) {
       console.error('Save Error full:', error);
       alert(
@@ -230,22 +237,31 @@ export default function UploadPage() {
   };
 
   return (
-    // CHANGE 4:
-    // Improved dark mode on page background by changing gradient stops too.
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">
-            Upload Table Image
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Upload a photo of any table and extract data using AI
-          </p>
+        {/* CHANGE: header now supports close button when opened in modal */}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">
+              Upload Table Image
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Upload a photo of any table and extract data using AI
+            </p>
+          </div>
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="inline-flex items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              aria-label="Close upload modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* CHANGE 5:
-              Upload card now has proper dark background + border */}
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
             <h2 className="text-xl font-bold text-gray-900 mb-4 dark:text-white">
               Photo Upload
@@ -308,8 +324,6 @@ export default function UploadPage() {
           </div>
 
           {extractedData && (
-            // CHANGE 6:
-            // Extracted data card fully updated for dark mode.
             <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
               <h2 className="text-xl font-bold text-gray-900 mb-4 dark:text-white">
                 Extracted Data
@@ -348,9 +362,6 @@ export default function UploadPage() {
                 </div>
               </div>
 
-              {/* CHANGE 7:
-                  Table wrapper, headers, and cells now have explicit light/dark colors
-                  so text does not become invisible. */}
               <div className="overflow-x-auto mb-4 rounded-lg border border-gray-200 dark:border-gray-700">
                 <table className="w-full text-sm bg-white dark:bg-gray-900">
                   <thead>
@@ -393,8 +404,6 @@ export default function UploadPage() {
                 </table>
               </div>
 
-              {/* CHANGE 8:
-                  Raw AI output area now also has explicit dark mode text/background colors. */}
               <details className="mb-4">
                 <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
                   View raw AI output
@@ -404,13 +413,26 @@ export default function UploadPage() {
                 </pre>
               </details>
 
-              <button
-                onClick={saveTable}
-                disabled={loading || extractedData.tableData.length === 0}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Save to My Tables'}
-              </button>
+              {/* CHANGE: added Cancel button for modal flow */}
+              <div className="flex gap-3">
+                <button
+                  onClick={saveTable}
+                  disabled={loading || extractedData.tableData.length === 0}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Saving...' : 'Save to My Tables'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetUploadState();
+                    onClose?.();
+                  }}
+                  className="px-4 py-3 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-gray-200"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>

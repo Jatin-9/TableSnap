@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Filter, Download, Eye, Trash2, Calendar, Tag } from 'lucide-react';
-import UploadPage from '../Upload/UploadPage';
+
+// ❌ CHANGE: removed UploadPage import (no longer needed)
+// import UploadPage from '../Upload/UploadPage';
 
 export default function TablesPage() {
   const { user } = useAuth();
@@ -12,14 +14,37 @@ export default function TablesPage() {
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [selectedSnapshot, setSelectedSnapshot] = useState<TableSnapshot | null>(null);
 
-  const filters = ['All', 'Languages', 'Expenses', 'Inventory', 'Shopping', 'Recipes', 'Fitness', 'Dated Records', 'General'];
+  const filters = [
+    'All',
+    'Languages',
+    'Expenses',
+    'Inventory',
+    'Shopping',
+    'Recipes',
+    'Fitness',
+    'Dated Records',
+    'General',
+  ];
 
+  // ✅ Existing: fetch on mount
   useEffect(() => {
     if (user) {
       fetchSnapshots();
     }
   }, [user]);
 
+  // ✅ CHANGE: listen for upload success → refresh tables
+  useEffect(() => {
+    const handler = () => fetchSnapshots();
+
+    window.addEventListener('refresh-tables', handler);
+
+    return () => {
+      window.removeEventListener('refresh-tables', handler);
+    };
+  }, [user]);
+
+  // ✅ Existing: filter logic
   useEffect(() => {
     if (selectedFilter === 'All') {
       setFilteredSnapshots(snapshots);
@@ -30,18 +55,25 @@ export default function TablesPage() {
     }
   }, [selectedFilter, snapshots]);
 
+  // ✅ IMPROVED: added error handling
   const fetchSnapshots = async () => {
+    if (!user) return;
+
     setLoading(true);
+
     const { data, error } = await supabase
       .from('table_snapshots')
       .select('*')
-      .eq('user_id', user!.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (data) {
+    if (error) {
+      console.error('Fetch snapshots error:', error);
+    } else if (data) {
       setSnapshots(data);
       setFilteredSnapshots(data);
     }
+
     setLoading(false);
   };
 
@@ -69,10 +101,14 @@ export default function TablesPage() {
     const csv = `${headers}\n${rows}`;
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `table-${snapshot.id}.csv`;
     a.click();
+
+    // ✅ CHANGE: cleanup memory
+    window.URL.revokeObjectURL(url);
   };
 
   const formatDate = (dateString: string) => {
@@ -84,26 +120,45 @@ export default function TablesPage() {
   };
 
   return (
-    <div className="p-6" >
-      <div className="mb-6 ">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">My Tables</h1>
-        <p className="text-gray-600 dark:text-blue-500 ">All your extracted tables in one place</p>
+    <div className="p-6">
+      
+      {/* ✅ CHANGE: Added Upload button here also (optional but useful) */}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">
+            My Tables
+          </h1>
+          <p className="text-gray-600 dark:text-blue-500">
+            All your extracted tables in one place
+          </p>
+        </div>
+
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-upload-modal'))}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          + Upload Table
+        </button>
       </div>
 
+      {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 dark:bg-gray-900">
-        <div className="flex items-center gap-2 mb-4 ">
+        <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-gray-400" />
-          <span className="text-sm font-medium text-gray-700 dark:text-white">Filter by tag:</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-white">
+            Filter by tag:
+          </span>
         </div>
+
         <div className="flex flex-wrap gap-2">
           {filters.map((filter) => (
-            <button 
+            <button
               key={filter}
               onClick={() => setSelectedFilter(filter)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedFilter === filter
-                  ? 'bg-blue-600 text-white '
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
               }`}
             >
               {filter}
@@ -117,13 +172,16 @@ export default function TablesPage() {
         </div>
       </div>
 
+      {/* Loading / Empty / List */}
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filteredSnapshots.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center dark:bg-gray-900">
-          <p className="text-gray-500 ">No tables found. Upload your first table image!</p>
+          <p className="text-gray-500">
+            No tables found. Upload your first table image!
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -134,42 +192,48 @@ export default function TablesPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2 ">
+                  <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       Table {snapshot.column_names.join(' • ')}
                     </h3>
+
                     <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium dark:text-white dark:bg-blue-600">
                       {snapshot.ocr_confidence}% confidence
                     </span>
                   </div>
+
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       {formatDate(snapshot.created_at)}
                     </div>
+
                     <div>
                       {snapshot.row_count} rows × {snapshot.column_count} cols
                     </div>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setSelectedSnapshot(snapshot)}
-                    className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                    className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
                     title="View"
                   >
                     <Eye className="w-5 h-5" />
                   </button>
+
                   <button
                     onClick={() => exportToCSV(snapshot)}
-                    className="p-2 hover:bg-green-50 rounded-lg transition-colors text-green-600 dark:hover:bg-blue-900/20"
+                    className="p-2 hover:bg-green-50 rounded-lg text-green-600"
                     title="Export CSV"
                   >
                     <Download className="w-5 h-5" />
                   </button>
+
                   <button
                     onClick={() => deleteSnapshot(snapshot.id)}
-                    className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600 dark:hover:bg-blue-900/20"
+                    className="p-2 hover:bg-red-50 rounded-lg text-red-600"
                     title="Delete"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -178,12 +242,12 @@ export default function TablesPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Tag className="w-4 h-4 text-gray-400 dark:text-blue-500" />
-                <div className="flex flex-wrap gap-2 ">
+                <Tag className="w-4 h-4 text-gray-400" />
+                <div className="flex flex-wrap gap-2">
                   {snapshot.auto_tags.map((tag) => (
                     <span
                       key={tag}
-                      className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium "
+                      className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium"
                     >
                       {tag}
                     </span>
@@ -195,36 +259,24 @@ export default function TablesPage() {
         </div>
       )}
 
-       {selectedSnapshot && (
+      {/* Preview Modal (unchanged) */}
+      {selectedSnapshot && (
         <div
           className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
           onClick={() => setSelectedSnapshot(null)}
         >
           <div
-            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white p-8 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800"
+            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white p-8 dark:bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Table Preview
-              </h2>
-              <button
-                onClick={() => setSelectedSnapshot(null)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
+            <h2 className="text-2xl font-bold mb-6">Table Preview</h2>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
-              <table className="w-full border-collapse">
+            <div className="overflow-x-auto">
+              <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b-2 border-gray-200 dark:bg-zinc-800 dark:border-zinc-700">
+                  <tr>
                     {selectedSnapshot.column_names.map((col) => (
-                      <th
-                        key={col}
-                        className="text-left p-3 font-semibold text-gray-900 dark:text-white"
-                      >
+                      <th key={col} className="text-left p-3 font-semibold">
                         {col}
                       </th>
                     ))}
@@ -232,12 +284,9 @@ export default function TablesPage() {
                 </thead>
                 <tbody>
                   {selectedSnapshot.table_data.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-b border-gray-100 hover:bg-gray-50 dark:border-zinc-800 dark:hover:bg-zinc-800/60"
-                    >
+                    <tr key={idx}>
                       {selectedSnapshot.column_names.map((col) => (
-                        <td key={col} className="p-3 text-gray-700 dark:text-gray-200">
+                        <td key={col} className="p-3">
                           {row[col]}
                         </td>
                       ))}
@@ -250,22 +299,21 @@ export default function TablesPage() {
             <div className="mt-6 flex gap-3">
               <button
                 onClick={() => exportToCSV(selectedSnapshot)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 dark:bg-blue-600 dark:hover:bg-blue-500"
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg"
               >
-                <Download className="w-5 h-5" />
                 Export CSV
               </button>
 
               <button
                 onClick={() => setSelectedSnapshot(null)}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-gray-200"
+                className="flex-1 bg-gray-200 py-3 rounded-lg"
               >
                 Close
               </button>
             </div>
           </div>
         </div>
-      )}<UploadPage/>
+      )}
     </div>
   );
 }

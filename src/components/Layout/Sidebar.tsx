@@ -11,6 +11,7 @@ import {
   Moon,
   Sun,
   Loader2,
+  Plus, // CHANGE: added Plus icon for upload button
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -110,6 +111,15 @@ export default function Sidebar() {
             <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
           </div>
         </div>
+
+        {/* CHANGE: new upload button in sidebar */}
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-upload-modal'))}
+          className="w-full mb-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Upload Table
+        </button>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
