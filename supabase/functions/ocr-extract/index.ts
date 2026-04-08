@@ -25,6 +25,11 @@ type ClassificationResult = {
   reasoning?: string;
 };
 
+type RefinedTable = {
+  columns: string[];
+  rows: Record<string, string>[];
+};
+
 type EnrichedTable = {
   columns: string[];
   rows: Record<string, string>[];
@@ -53,8 +58,7 @@ function cleanJsonText(text: string) {
 
 function safeParseJson<T>(text: string): T | null {
   try {
-    const cleaned = cleanJsonText(text);
-    return JSON.parse(cleaned) as T;
+    return JSON.parse(cleanJsonText(text)) as T;
   } catch (_error) {
     console.error("JSON parse failed. Raw model output:\n", text);
     return null;
@@ -65,8 +69,11 @@ function normalizeColumns(columns: unknown): string[] {
   if (!Array.isArray(columns)) return ["Text"];
 
   const cleaned = columns
-    .map((col) => String(col).trim())
-    .filter(Boolean);
+    .map((col) => {
+      if (col === null || col === undefined) return "";
+      return String(col).trim();
+    })
+    .filter((col) => col !== "");
 
   return cleaned.length > 0 ? cleaned : ["Text"];
 }
@@ -79,23 +86,23 @@ function normalizeRows(rows: Record<string, unknown>[], columns: string[]) {
     columns.forEach((col, index) => {
       const safeCol = String(col).trim();
 
-      // Try exact match
+      // Try direct key first
       if (row[safeCol] !== undefined && row[safeCol] !== null) {
         normalized[safeCol] = String(row[safeCol]);
         return;
       }
 
-      // Try matching keys safely
-      const matchEntry = rowEntries.find(([key]) => {
+      // Then try case-insensitive / trimmed key match
+      const matchedEntry = rowEntries.find(([key]) => {
         return String(key).trim().toLowerCase() === safeCol.toLowerCase();
       });
 
-      if (matchEntry) {
-        normalized[safeCol] = String(matchEntry[1]);
+      if (matchedEntry) {
+        normalized[safeCol] = String(matchedEntry[1]);
         return;
       }
 
-      // Fallback by index
+      // Fallback by index if keys are weird
       const rowValues = rowEntries.map(([, value]) => value);
       if (rowValues[index] !== undefined && rowValues[index] !== null) {
         normalized[safeCol] = String(rowValues[index]);
@@ -109,8 +116,6 @@ function normalizeRows(rows: Record<string, unknown>[], columns: string[]) {
   });
 }
 
-// This checks if enriched rows are actually usable.
-// If enrichment comes back mostly empty, we should not trust it.
 function hasEnoughFilledCells(
   rows: Record<string, string>[],
   columns: string[],
@@ -133,52 +138,44 @@ function hasEnoughFilledCells(
   return filledCells / totalCells >= minFilledRatio;
 }
 
-// We only want to use enriched rows if they still look healthy.
-function shouldUseEnrichedRows(
-  extracted: ExtractedTable,
-  enriched: EnrichedTable,
+function shouldUseTable(
+  baseRowsCount: number,
+  table: { rows: Record<string, string>[]; columns: string[] },
 ) {
-  if (!enriched.rows || enriched.rows.length === 0) return false;
-  if (enriched.rows.length < extracted.rows.length * 0.7) return false;
-  if (!hasEnoughFilledCells(enriched.rows, enriched.columns)) return false;
+  if (!table.rows || table.rows.length === 0) return false;
+  if (table.rows.length < baseRowsCount * 0.7) return false;
+  if (!hasEnoughFilledCells(table.rows, table.columns)) return false;
   return true;
 }
 
-/**
- * Merge enrichment into extracted rows instead of replacing them.
- *
- * This is the key fix.
- * Step 1 remains the base table.
- * Step 3 only adds extra columns on top.
- */
-function mergeEnrichmentIntoExtracted(
-  extracted: ExtractedTable,
-  enriched: EnrichedTable,
+function mergeExtraColumnsIntoBase(
+  base: RefinedTable | ExtractedTable,
+  extra: EnrichedTable,
 ): EnrichedTable {
-  const baseColumns = [...extracted.columns];
-  const addedColumns = (enriched.addedColumns ?? []).filter(
+  const baseColumns = [...base.columns];
+
+  const addedColumnsFromExplicitList = (extra.addedColumns ?? []).filter(
     (col) => !baseColumns.includes(col),
   );
 
-  // If model forgot to list addedColumns properly, infer them from enriched.columns
-  const inferredAddedColumns = enriched.columns.filter(
+  const addedColumnsFromDiff = extra.columns.filter(
     (col) => !baseColumns.includes(col),
   );
 
   const finalAddedColumns = Array.from(
-    new Set([...addedColumns, ...inferredAddedColumns]),
+    new Set([...addedColumnsFromExplicitList, ...addedColumnsFromDiff]),
   );
 
   const finalColumns = [...baseColumns, ...finalAddedColumns];
 
-  const finalRows = extracted.rows.map((baseRow, index) => {
-    const enrichedRow = enriched.rows[index] ?? {};
+  const finalRows = base.rows.map((baseRow, index) => {
+    const extraRow = extra.rows[index] ?? {};
     const mergedRow: Record<string, string> = { ...baseRow };
 
-    // Only add genuinely new columns here.
-    // We do NOT overwrite extracted columns.
+    // Only add genuinely new columns.
+    // Do NOT overwrite the base columns.
     finalAddedColumns.forEach((col) => {
-      const value = enrichedRow[col];
+      const value = extraRow[col];
       mergedRow[col] =
         value !== undefined && value !== null ? String(value) : "";
     });
@@ -193,10 +190,6 @@ function mergeEnrichmentIntoExtracted(
   };
 }
 
-/**
- * STEP 1
- * Extract only visible data from image.
- */
 async function extractVisibleData(imageBase64: string): Promise<ExtractedTable> {
   const response = await openai.responses.create({
     model: "gpt-4o-mini",
@@ -260,7 +253,6 @@ CRITICAL RULES:
   console.log("STEP 1 BEFORE NORMALIZE ROWS:", JSON.stringify(rows, null, 2));
   console.log("STEP 1 COLUMNS:", JSON.stringify(columns, null, 2));
 
-  // Fallback only if rows are totally missing
   if (rows.length === 0 && raw_text.trim()) {
     const lines = raw_text
       .split("\n")
@@ -284,10 +276,6 @@ CRITICAL RULES:
   };
 }
 
-/**
- * STEP 2
- * Decide if data is language-related.
- */
 async function classifyTable(
   extracted: ExtractedTable,
 ): Promise<ClassificationResult> {
@@ -339,13 +327,83 @@ ${JSON.stringify(extracted)}
   };
 }
 
-/**
- * STEP 3
- * Enrich language data.
- * This step may add columns, but it should not rewrite the extracted base.
- */
-async function enrichLanguageTable(
+async function refineLanguageSchema(
   extracted: ExtractedTable,
+  classification: ClassificationResult,
+): Promise<RefinedTable> {
+  const response = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      {
+        role: "user",
+        content: `
+You are refining the schema of a language-learning table.
+
+Return ONLY valid JSON in this exact format:
+{
+  "columns": [],
+  "rows": []
+}
+
+RULES:
+- Rename generic or unclear columns into the most likely learner-friendly names.
+- Keep the same row values.
+- Do NOT add new columns yet.
+- Do NOT remove rows.
+- Do NOT overwrite values with different meanings.
+- Only rename the existing schema more clearly.
+
+Examples:
+- For Japanese, likely column names may include:
+  - Romaji
+  - Hiragana
+  - Katakana
+  - Kanji
+  - English Meaning
+- Use the most specific script label possible.
+- If a column is clearly Hiragana, call it "Hiragana", not "Kana".
+- If a column is clearly Katakana, call it "Katakana".
+- Keep output aligned row-by-row.
+- All values must be strings.
+- Return strictly valid JSON parseable by JSON.parse().
+- Return JSON only.
+
+Classification:
+${JSON.stringify(classification)}
+
+Extracted table:
+${JSON.stringify(extracted)}
+`,
+      },
+    ],
+  });
+
+  console.log("STEP 3 RAW OUTPUT (SCHEMA REFINE):\n", response.output_text);
+
+  const parsed = safeParseJson<RefinedTable>(response.output_text);
+
+  if (!parsed) {
+    throw new Error("Step 3 failed: invalid JSON during schema refinement");
+  }
+
+  const columns = normalizeColumns(
+    Array.isArray(parsed.columns) && parsed.columns.length > 0
+      ? parsed.columns
+      : extracted.columns,
+  );
+
+  const rows = Array.isArray(parsed.rows)
+    ? normalizeRows(parsed.rows as Record<string, unknown>[], columns)
+    : extracted.rows;
+
+  return {
+    columns,
+    rows,
+  };
+}
+
+async function enrichLanguageTable(
+  refined: RefinedTable,
   classification: ClassificationResult,
 ): Promise<EnrichedTable> {
   const response = await openai.responses.create({
@@ -364,66 +422,51 @@ Return ONLY valid JSON in this exact format:
 }
 
 RULES:
-- Preserve all original extracted columns first.
-- Never overwrite original extracted values.
-- Only add missing helpful columns when confidence is reasonably high.
-- Do not duplicate a concept already present.
-- If extracted rows are incomplete, you may infer missing values only when reasonably confident.
-- If not confident, leave the value empty rather than inventing something.
-- All values must be strings.
+- Start from the already refined table.
+- Preserve all existing columns and values.
+- Add only genuinely useful missing columns.
+- Never overwrite the existing refined values.
+- Only add new columns when confidence is reasonably high.
+- If not confident, leave the added value empty rather than inventing something.
 - Keep row alignment correct.
+- All values must be strings.
 - Return strictly valid JSON parseable by JSON.parse().
 - Return JSON only.
 
-SCRIPT RULES:
-- Use the most specific script labels possible.
-- For Japanese:
-  - Use "Hiragana" when text is clearly Hiragana.
-  - Use "Katakana" when text is clearly Katakana.
-  - Use "Kanji" when text is clearly Kanji.
-  - Use "Kana" only if Hiragana and Katakana are mixed together in one column and cannot be separated cleanly.
+For Japanese, useful extra columns may include:
+- Kanji
+- Katakana
+- Part of Speech
 
-Possible examples:
-- Japanese: Hiragana, Katakana, Kanji, Romaji, English Meaning
-- Chinese: Hanzi, Pinyin, English Meaning
-- Hindi: Devanagari, Transliteration, English Meaning
-- Korean: Hangul, Romanization, English Meaning
+Do not add unnecessary columns just for the sake of it.
 
 Classification:
 ${JSON.stringify(classification)}
 
-Extracted table:
-${JSON.stringify(extracted)}
+Refined table:
+${JSON.stringify(refined)}
 `,
       },
     ],
   });
 
-  console.log("STEP 3 RAW OUTPUT:\n", response.output_text);
+  console.log("STEP 4 RAW OUTPUT (ENRICH):\n", response.output_text);
 
   const parsed = safeParseJson<EnrichedTable>(response.output_text);
 
   if (!parsed) {
-    throw new Error("Step 3 failed: invalid JSON during enrichment");
+    throw new Error("Step 4 failed: invalid JSON during enrichment");
   }
 
   const columns = normalizeColumns(
     Array.isArray(parsed.columns) && parsed.columns.length > 0
       ? parsed.columns
-      : extracted.columns,
+      : refined.columns,
   );
-
-  console.log(
-    "STEP 3 BEFORE NORMALIZE ROWS:",
-    JSON.stringify(parsed.rows, null, 2),
-  );
-  console.log("STEP 3 COLUMNS:", JSON.stringify(columns, null, 2));
 
   const rows = Array.isArray(parsed.rows)
     ? normalizeRows(parsed.rows as Record<string, unknown>[], columns)
     : [];
-
-  console.log("STEP 3 AFTER NORMALIZE ROWS:", JSON.stringify(rows, null, 2));
 
   return {
     columns,
@@ -432,12 +475,8 @@ ${JSON.stringify(extracted)}
   };
 }
 
-/**
- * STEP 4
- * Validation should help, not destroy the pipeline.
- */
 async function validateLanguageTable(
-  enriched: EnrichedTable,
+  table: EnrichedTable,
   classification: ClassificationResult,
 ): Promise<ValidationResult> {
   const response = await openai.responses.create({
@@ -470,19 +509,19 @@ VALIDATION RULES:
 Classification:
 ${JSON.stringify(classification)}
 
-Enriched table:
-${JSON.stringify(enriched)}
+Table:
+${JSON.stringify(table)}
 `,
       },
     ],
   });
 
-  console.log("STEP 4 RAW OUTPUT:\n", response.output_text);
+  console.log("STEP 5 RAW OUTPUT (VALIDATE):\n", response.output_text);
 
   const parsed = safeParseJson<ValidationResult>(response.output_text);
 
   if (!parsed) {
-    throw new Error("Step 4 failed: invalid JSON during validation");
+    throw new Error("Step 5 failed: invalid JSON during validation");
   }
 
   return {
@@ -491,7 +530,7 @@ ${JSON.stringify(enriched)}
     correctedRows: Array.isArray(parsed.correctedRows)
       ? normalizeRows(
           parsed.correctedRows as Record<string, unknown>[],
-          enriched.columns,
+          table.columns,
         )
       : undefined,
   };
@@ -509,58 +548,87 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "No image provided" }, 400);
     }
 
-    // Step 1: extract the base table
+    // STEP 1: base extraction
     const extracted = await extractVisibleData(imageBase64);
 
-    // Step 2: classify it
+    // STEP 2: classify
     const classification = await classifyTable(extracted);
 
-    // Default final result is just extraction
+    let refined: RefinedTable | null = null;
+    let enriched: EnrichedTable | null = null;
+    let validation: ValidationResult | null = null;
+
+    // Default final = extracted
     let finalTable: EnrichedTable = {
       columns: extracted.columns,
       rows: extracted.rows,
       addedColumns: [],
     };
 
-    let validation: ValidationResult | null = null;
-
-    // Only enrich if it is language content
     if (classification.datasetType === "language") {
-      const enriched = await enrichLanguageTable(extracted, classification);
+      // STEP 3: rename generic columns into useful names
+      const refinedResult = await refineLanguageSchema(extracted, classification);
+      refined = refinedResult;
 
-      // Important:
-      // merge enrichment INTO extraction instead of replacing extraction
-      const merged = mergeEnrichmentIntoExtracted(extracted, enriched);
+      const baseForEnrichment: RefinedTable = shouldUseTable(
+        extracted.rows.length,
+        refinedResult,
+      )
+        ? refinedResult
+        : {
+            columns: extracted.columns,
+            rows: extracted.rows,
+          };
 
+      // STEP 4: ask model for extra helpful columns
+      const enrichedResult = await enrichLanguageTable(
+        baseForEnrichment,
+        classification,
+      );
+
+      // Merge added columns into the refined base instead of replacing it
+      const merged = mergeExtraColumnsIntoBase(baseForEnrichment, enrichedResult);
+      enriched = merged;
+
+      // STEP 5: validate the merged table
       const validated = await validateLanguageTable(merged, classification);
+      validation = validated;
 
-      const candidateTable: EnrichedTable = {
+      // This is the important fix:
+      // if correctedRows is [], we should NOT use it.
+      const finalRows =
+        validated.correctedRows && validated.correctedRows.length > 0
+          ? validated.correctedRows
+          : merged.rows;
+
+      const candidateFinal: EnrichedTable = {
         columns: merged.columns,
-        rows: validated.correctedRows ?? merged.rows,
+        rows: finalRows,
         addedColumns: merged.addedColumns ?? [],
       };
 
-      // If merged/enriched result looks weak, keep extracted base table
-      if (shouldUseEnrichedRows(extracted, candidateTable)) {
-        finalTable = candidateTable;
+      // If enriched result is still strong enough, use it.
+      // Otherwise keep the refined/extracted base.
+      if (shouldUseTable(baseForEnrichment.rows.length, candidateFinal)) {
+        finalTable = candidateFinal;
       } else {
         console.warn(
-          "Merged enrichment looked weak, so keeping extracted base rows.",
+          "Enriched table looked weak, so keeping refined/extracted base table.",
         );
 
         finalTable = {
-          columns: extracted.columns,
-          rows: extracted.rows,
+          columns: baseForEnrichment.columns,
+          rows: baseForEnrichment.rows,
           addedColumns: merged.addedColumns ?? [],
         };
       }
-
-      validation = validated;
     }
 
     return jsonResponse({
       extracted,
       classification,
+      refined,
+      enriched,
       final: finalTable,
       validation,
     });
