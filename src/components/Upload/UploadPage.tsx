@@ -96,107 +96,153 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     return tags.length > 0 ? tags : ['General'];
   };
 
-  const processOCR = async () => {
-    if (!file || !user) return;
+ const processOCR = async () => {
+  if (!file || !user) return;
 
-    setLoading(true);
-    setOcrStatus('Uploading image for AI extraction...');
+  setLoading(true);
+  setOcrStatus('Uploading image for AI extraction...');
 
-    try {
-      const imageBase64 = await fileToBase64(file);
+  try {
+    // Convert image to base64
+    const imageBase64 = await fileToBase64(file);
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            imageBase64,
-          }),
-        }
-      );
-
-      const responseText = await response.text();
-      console.log('OCR raw response:', response.status, responseText);
-
-      if (!response.ok) {
-        alert(`OCR failed (${response.status}): ${responseText}`);
-        setOcrStatus('OCR failed');
-        return;
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          imageBase64,
+        }),
       }
+    );
 
-      const result = JSON.parse(responseText);
+    const responseText = await response.text();
+    console.log('OCR raw response:', response.status, responseText);
 
-      if (!result?.result) {
-        alert('No result returned from AI');
-        setOcrStatus('OCR failed');
-        return;
-      }
-
-      const cleaned = result.result.replace(/```json|```/g, '').trim();
-
-      let parsed: { columns?: string[]; rows?: Record<string, string>[] };
-
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (parseError) {
-        console.error('Failed to parse AI JSON:', cleaned);
-        alert('AI returned invalid JSON. Check console for details.');
-        setOcrStatus('OCR failed');
-        return;
-      }
-
-      const columnNames =
-        Array.isArray(parsed.columns) && parsed.columns.length > 0
-          ? parsed.columns
-          : ['Text'];
-
-      const tableData =
-        Array.isArray(parsed.rows) && parsed.rows.length > 0
-          ? parsed.rows.map((row) => {
-              const normalizedRow: Record<string, string> = {};
-
-              columnNames.forEach((col, index) => {
-                if (row[col] !== undefined) {
-                  normalizedRow[col] = String(row[col]);
-                  return;
-                }
-
-                const rowValues = Object.values(row);
-                normalizedRow[col] = rowValues[index] !== undefined ? String(rowValues[index]) : '';
-              });
-
-              return normalizedRow;
-            })
-          : [];
-
-      const rawText = JSON.stringify(parsed, null, 2);
-      const autoTags = detectTags(rawText, columnNames);
-
-      setExtractedData({
-        tableData,
-        columnNames,
-        autoTags,
-        confidence: 90,
-        rawText,
-      });
-
-      setOcrStatus('AI extraction complete');
-    } catch (error) {
-      console.error('OCR Error:', error);
-      alert(
-        `Error processing image: ${
-          error instanceof Error ? error.message : JSON.stringify(error)
-        }`
-      );
+    if (!response.ok) {
+      alert(`OCR failed (${response.status}): ${responseText}`);
       setOcrStatus('OCR failed');
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    // NEW RESPONSE STRUCTURE
+    const result = JSON.parse(responseText);
+
+    /**
+     * Before:
+     * result.result → string JSON from AI
+     *
+     * Now:
+     * result.final → actual usable table
+     * result.classification → what type of data it is
+     * result.validation → warnings / checks
+     */
+
+    const finalTable = result.final;
+
+    if (!finalTable || !finalTable.columns || !finalTable.rows) {
+      alert('AI did not return valid structured data');
+      setOcrStatus('OCR failed');
+      return;
+    }
+
+
+    // COLUMN + ROW NORMALIZATION
+
+    // This ensures every row has the same shape as columns
+    const columnNames =
+      Array.isArray(finalTable.columns) && finalTable.columns.length > 0
+        ? finalTable.columns
+        : ['Text'];
+
+    const tableData =
+      Array.isArray(finalTable.rows) && finalTable.rows.length > 0
+        ? finalTable.rows.map((row: Record<string, any>) => {
+            const normalizedRow: Record<string, string> = {};
+
+            columnNames.forEach((col, index) => {
+              // If key exists, use it
+              if (row[col] !== undefined) {
+                normalizedRow[col] = String(row[col]);
+                return;
+              }
+
+              // Otherwise fallback by index (safety fallback)
+              const rowValues = Object.values(row);
+              normalizedRow[col] =
+                rowValues[index] !== undefined
+                  ? String(rowValues[index])
+                  : '';
+            });
+
+            return normalizedRow;
+          })
+        : [];
+
+
+    //  METADATA FROM PIPELINE
+
+    const classification = result.classification;
+    const validation = result.validation;
+
+    // we can later use this in UI if we want
+    const datasetType = classification?.datasetType ?? 'general';
+    const language = classification?.languageName ?? '';
+
+    const warnings = validation?.warnings ?? [];
+
+
+    //  TAG DETECTION (your existing logic)
+
+    const rawText = JSON.stringify(finalTable, null, 2);
+    const autoTags = detectTags(rawText, columnNames);
+
+
+    //  FINAL STATE SET
+
+    setExtractedData({
+      tableData,
+      columnNames,
+      autoTags,
+      confidence: 90, // still static for now
+      rawText,
+    });
+
+    /**
+     * Optional: we can log these to understand behavior
+     */
+    console.log('Classification:', classification);
+    console.log('Validation:', validation);
+    console.log('Warnings:', warnings);
+
+    // Update status message depending on what happened
+    if (datasetType === 'language') {
+      setOcrStatus(
+        warnings.length > 0
+          ? 'Language data extracted (with warnings)'
+          : `Language data extracted (${language || 'detected'})`
+      );
+    } else {
+      setOcrStatus('Table extracted successfully');
+    }
+  } catch (error) {
+    console.error('OCR Error:', error);
+
+    alert(
+      `Error processing image: ${
+        error instanceof Error ? error.message : JSON.stringify(error)
+      }`
+    );
+
+    setOcrStatus('OCR failed');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const saveTable = async () => {
     if (!extractedData || !user) return;
