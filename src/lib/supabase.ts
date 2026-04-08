@@ -17,17 +17,25 @@ export interface User {
   preferences: Record<string, unknown>;
 }
 
-export interface TableSnapshot {
+export type TableSnapshot = {
   id: string;
   user_id: string;
-  table_data: Array<Record<string, string>>;
+  table_data: Record<string, string>[];
   column_names: string[];
   auto_tags: string[];
   ocr_confidence: number;
   row_count: number;
   column_count: number;
   created_at: string;
-}
+
+  // New optional metadata
+  dataset_type?: 'language' | 'general' | null;
+  language_code?: string | null;
+  language_name?: string | null;
+  detected_languages?: string[] | null;
+  added_columns?: string[] | null;
+  validation_warnings?: string[] | null;
+};
 
 export interface UserAnalytics {
   id: string;

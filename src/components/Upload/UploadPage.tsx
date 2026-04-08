@@ -1,12 +1,23 @@
 import { useState } from 'react';
-import { Upload, Image as ImageIcon, Loader2, X } from 'lucide-react'; // CHANGE: added X icon for close button
+import { Upload, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
-// CHANGE: UploadPage now accepts callbacks from parent modal/layout
 type UploadPageProps = {
   onSaved?: () => void;
   onClose?: () => void;
+};
+
+type PipelineClassification = {
+  datasetType?: 'language' | 'general';
+  languageName?: string;
+  languageCode?: string;
+  reasoning?: string;
+};
+
+type PipelineValidation = {
+  isValid?: boolean;
+  warnings?: string[];
 };
 
 type ExtractedData = {
@@ -15,9 +26,16 @@ type ExtractedData = {
   autoTags: string[];
   confidence: number;
   rawText: string;
+
+  // New metadata from pipeline
+  datasetType?: 'language' | 'general';
+  languageName?: string;
+  languageCode?: string;
+  detectedLanguages?: string[];
+  validationWarnings?: string[];
+  addedColumns?: string[];
 };
 
-// CHANGE: receive onSaved and onClose props
 export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -27,7 +45,6 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
 
   const { user } = useAuth();
 
-  // CHANGE: helper to fully reset upload UI after save/cancel
   const resetUploadState = () => {
     setFile(null);
     setPreview(null);
@@ -96,16 +113,105 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     return tags.length > 0 ? tags : ['General'];
   };
 
- const processOCR = async () => {
-  if (!file || !user) return;
+  // This hides AI-added columns that are completely empty.
+  // Original columns are always kept.
+  const filterVisibleColumns = (
+    allColumns: string[],
+    rows: Record<string, string>[],
+    addedColumns: string[] = []
+  ) => {
+    return allColumns.filter((col) => {
+      // Keep original / non-added columns no matter what
+      if (!addedColumns.includes(col)) return true;
 
-  setLoading(true);
-  setOcrStatus('Uploading image for AI extraction...');
+      // For added columns, only show if at least one row has data
+      const hasAnyValue = rows.some((row) => {
+        const value = row[col];
+        return typeof value === 'string' && value.trim() !== '';
+      });
 
-  try {
-    // Convert image to base64
-    const imageBase64 = await fileToBase64(file);
+      return hasAnyValue;
+    });
+  };
 
+  // Small helper so both fast and full responses get normalized the same way
+const buildExtractedDataFromResult = (result: any): ExtractedData => {
+  const finalTable = result?.final;
+  const classification: PipelineClassification = result?.classification ?? {};
+  const validation: PipelineValidation = result?.validation ?? {};
+
+  if (!finalTable || !Array.isArray(finalTable.columns) || !Array.isArray(finalTable.rows)) {
+    throw new Error('AI did not return valid structured data');
+  }
+
+  const rawColumnNames =
+    Array.isArray(finalTable.columns) && finalTable.columns.length > 0
+      ? finalTable.columns.map((col: unknown) => String(col))
+      : ['Text'];
+
+  const normalizedRows =
+    Array.isArray(finalTable.rows) && finalTable.rows.length > 0
+      ? finalTable.rows.map((row: Record<string, any>) => {
+          const normalizedRow: Record<string, string> = {};
+
+          rawColumnNames.forEach((col, index) => {
+            if (row[col] !== undefined && row[col] !== null) {
+              normalizedRow[col] = String(row[col]);
+              return;
+            }
+
+            const rowValues = Object.values(row);
+            normalizedRow[col] =
+              rowValues[index] !== undefined && rowValues[index] !== null
+                ? String(rowValues[index])
+                : '';
+          });
+
+          return normalizedRow;
+        })
+      : [];
+
+  const addedColumns = Array.isArray(finalTable.addedColumns)
+    ? finalTable.addedColumns.map((col: unknown) => String(col))
+    : [];
+
+  const visibleColumns = filterVisibleColumns(rawColumnNames, normalizedRows, addedColumns);
+
+  const visibleRows = normalizedRows.map((row) => {
+    const filteredRow: Record<string, string> = {};
+    visibleColumns.forEach((col) => {
+      filteredRow[col] = row[col] ?? '';
+    });
+    return filteredRow;
+  });
+
+  const languageName = classification.languageName ?? '';
+  const languageCode = classification.languageCode ?? '';
+
+  // For now we keep detectedLanguages simple:
+  // one primary language if present, otherwise empty array.
+  const detectedLanguages = languageName ? [languageName] : [];
+
+  const rawText = JSON.stringify(result, null, 2);
+  const autoTags = detectTags(rawText, visibleColumns);
+
+  return {
+    tableData: visibleRows,
+    columnNames: visibleColumns,
+    autoTags,
+    confidence: 90,
+    rawText,
+
+    datasetType: classification.datasetType ?? 'general',
+    languageName,
+    languageCode,
+    detectedLanguages,
+    validationWarnings: Array.isArray(validation.warnings) ? validation.warnings : [],
+    addedColumns,
+  };
+};
+
+  const callPipeline = async (imageBase64: string, mode: 'fast' | 'full') => {
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
       {
@@ -116,176 +222,145 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         },
         body: JSON.stringify({
           imageBase64,
+          mode,
         }),
       }
     );
 
     const responseText = await response.text();
-    console.log('OCR raw response:', response.status, responseText);
+    console.log(`${mode.toUpperCase()} OCR raw response:`, response.status, responseText);
 
     if (!response.ok) {
-      alert(`OCR failed (${response.status}): ${responseText}`);
-      setOcrStatus('OCR failed');
-      return;
+      throw new Error(`OCR failed (${response.status}): ${responseText}`);
     }
 
-    // NEW RESPONSE STRUCTURE
-    const result = JSON.parse(responseText);
+    return JSON.parse(responseText);
+  };
 
-    /**
-     * Before:
-     * result.result → string JSON from AI
-     *
-     * Now:
-     * result.final → actual usable table
-     * result.classification → what type of data it is
-     * result.validation → warnings / checks
-     */
-
-    const finalTable = result.final;
-
-    if (!finalTable || !finalTable.columns || !finalTable.rows) {
-      alert('AI did not return valid structured data');
-      setOcrStatus('OCR failed');
-      return;
-    }
-
-
-    // COLUMN + ROW NORMALIZATION
-
-    // This ensures every row has the same shape as columns
-    const columnNames =
-      Array.isArray(finalTable.columns) && finalTable.columns.length > 0
-        ? finalTable.columns
-        : ['Text'];
-
-    const tableData =
-      Array.isArray(finalTable.rows) && finalTable.rows.length > 0
-        ? finalTable.rows.map((row: Record<string, any>) => {
-            const normalizedRow: Record<string, string> = {};
-
-            columnNames.forEach((col, index) => {
-              // If key exists, use it
-              if (row[col] !== undefined) {
-                normalizedRow[col] = String(row[col]);
-                return;
-              }
-
-              // Otherwise fallback by index (safety fallback)
-              const rowValues = Object.values(row);
-              normalizedRow[col] =
-                rowValues[index] !== undefined
-                  ? String(rowValues[index])
-                  : '';
-            });
-
-            return normalizedRow;
-          })
-        : [];
-
-
-    //  METADATA FROM PIPELINE
-
-    const classification = result.classification;
-    const validation = result.validation;
-
-    // we can later use this in UI if we want
-    const datasetType = classification?.datasetType ?? 'general';
-    const language = classification?.languageName ?? '';
-
-    const warnings = validation?.warnings ?? [];
-
-
-    //  TAG DETECTION (your existing logic)
-
-    const rawText = JSON.stringify(finalTable, null, 2);
-    const autoTags = detectTags(rawText, columnNames);
-
-
-    //  FINAL STATE SET
-
-    setExtractedData({
-      tableData,
-      columnNames,
-      autoTags,
-      confidence: 90, // still static for now
-      rawText,
-    });
-
-    /**
-     * Optional: we can log these to understand behavior
-     */
-    console.log('Classification:', classification);
-    console.log('Validation:', validation);
-    console.log('Warnings:', warnings);
-
-    // Update status message depending on what happened
-    if (datasetType === 'language') {
-      setOcrStatus(
-        warnings.length > 0
-          ? 'Language data extracted (with warnings)'
-          : `Language data extracted (${language || 'detected'})`
-      );
-    } else {
-      setOcrStatus('Table extracted successfully');
-    }
-  } catch (error) {
-    console.error('OCR Error:', error);
-
-    alert(
-      `Error processing image: ${
-        error instanceof Error ? error.message : JSON.stringify(error)
-      }`
-    );
-
-    setOcrStatus('OCR failed');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const saveTable = async () => {
-    if (!extractedData || !user) return;
+  const processOCR = async () => {
+    if (!file || !user) return;
 
     setLoading(true);
+    setExtractedData(null);
+    setOcrStatus('Uploading image and extracting table...');
 
     try {
-      const payload = {
-        user_id: user.id,
-        table_data: extractedData.tableData,
-        column_names: extractedData.columnNames,
-        auto_tags: extractedData.autoTags,
-        ocr_confidence: extractedData.confidence,
-        row_count: extractedData.tableData.length,
-        column_count: extractedData.columnNames.length,
-      };
+      const imageBase64 = await fileToBase64(file);
 
-      const { error } = await supabase.from('table_snapshots').insert(payload);
+      // -----------------------------
+      // STEP 1: FAST PATH
+      // -----------------------------
+      // This gets the table visible quickly.
+      const fastResult = await callPipeline(imageBase64, 'fast');
+      const fastData = buildExtractedDataFromResult(fastResult);
 
-      if (error) {
-        console.error('Supabase insert error:', error);
-        throw error;
+      setExtractedData(fastData);
+
+      const isLanguage = fastData.datasetType === 'language';
+      const languageName = fastData.languageName || 'detected language';
+
+      if (isLanguage) {
+        setOcrStatus(`Language table detected (${languageName}). Enriching...`);
+      } else {
+        setOcrStatus('Table extracted successfully');
       }
 
-      // CHANGE: instead of navigate('/dashboard'), reset and notify parent
-      resetUploadState();
-      onSaved?.();
+      // -----------------------------
+      // STEP 2: FULL PATH (only for language)
+      // -----------------------------
+      // We already show the fast result first, so the UI feels responsive.
+      if (isLanguage) {
+        const fullResult = await callPipeline(imageBase64, 'full');
+        const fullData = buildExtractedDataFromResult(fullResult);
+
+        // Only replace the fast result if the full result is actually useful.
+        const hasRows = fullData.tableData.length > 0;
+        const hasColumns = fullData.columnNames.length > 0;
+
+        if (hasRows && hasColumns) {
+          setExtractedData(fullData);
+        }
+
+        const warnings = fullData.validationWarnings ?? [];
+        const addedColumns = fullData.addedColumns ?? [];
+
+        if (warnings.length > 0) {
+          setOcrStatus(
+            addedColumns.length > 0
+              ? `Language data enriched with warnings (${addedColumns.join(', ')})`
+              : 'Language data extracted with warnings'
+          );
+        } else {
+          setOcrStatus(
+            addedColumns.length > 0
+              ? `Language data enriched (${addedColumns.join(', ')})`
+              : `Language data extracted (${languageName})`
+          );
+        }
+      }
     } catch (error) {
-      console.error('Save Error full:', error);
+      console.error('OCR Error:', error);
+
       alert(
-        `Error saving table: ${
+        `Error processing image: ${
           error instanceof Error ? error.message : JSON.stringify(error)
         }`
       );
+
+      setOcrStatus('OCR failed');
     } finally {
       setLoading(false);
     }
   };
 
+const saveTable = async () => {
+  if (!extractedData || !user) return;
+
+  setLoading(true);
+
+  try {
+    const payload = {
+      user_id: user.id,
+      table_data: extractedData.tableData,
+      column_names: extractedData.columnNames,
+      auto_tags: extractedData.autoTags,
+      ocr_confidence: extractedData.confidence,
+      row_count: extractedData.tableData.length,
+      column_count: extractedData.columnNames.length,
+
+      // New metadata fields
+      dataset_type: extractedData.datasetType ?? 'general',
+      language_code: extractedData.languageCode ?? null,
+      language_name: extractedData.languageName ?? null,
+      detected_languages: extractedData.detectedLanguages ?? [],
+      added_columns: extractedData.addedColumns ?? [],
+      validation_warnings: extractedData.validationWarnings ?? [],
+    };
+
+    const { error } = await supabase.from('table_snapshots').insert(payload);
+
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw error;
+    }
+
+    resetUploadState();
+    onSaved?.();
+  } catch (error) {
+    console.error('Save Error full:', error);
+    alert(
+      `Error saving table: ${
+        error instanceof Error ? error.message : JSON.stringify(error)
+      }`
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* CHANGE: header now supports close button when opened in modal */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">
@@ -314,7 +389,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
             </h2>
 
             <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
-              Extraction mode: <span className="font-semibold">OpenAI Vision</span>
+              Extraction mode: <span className="font-semibold">Fast + Enrichment pipeline</span>
             </div>
 
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer dark:border-gray-700 dark:hover:border-blue-500">
@@ -392,6 +467,27 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                 </div>
               </div>
 
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Type:
+                </span>
+                <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium dark:bg-gray-800 dark:text-gray-200">
+                  {extractedData.datasetType ?? 'general'}
+                </span>
+
+                {extractedData.languageName && (
+                  <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium dark:bg-purple-900/30 dark:text-purple-300">
+                    {extractedData.languageName}
+                  </span>
+                )}
+
+                {extractedData.addedColumns && extractedData.addedColumns.length > 0 && (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium dark:bg-green-900/30 dark:text-green-300">
+                    Enriched: {extractedData.addedColumns.join(', ')}
+                  </span>
+                )}
+              </div>
+
               <div className="mb-4">
                 <span className="text-sm font-medium text-gray-700 mb-2 block dark:text-gray-300">
                   Auto Tags
@@ -407,6 +503,20 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                   ))}
                 </div>
               </div>
+
+              {extractedData.validationWarnings &&
+                extractedData.validationWarnings.length > 0 && (
+                  <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900/40 dark:bg-yellow-900/10">
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-2">
+                      Validation warnings
+                    </p>
+                    <ul className="text-sm text-yellow-700 dark:text-yellow-200 space-y-1">
+                      {extractedData.validationWarnings.map((warning, idx) => (
+                        <li key={idx}>• {warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
               <div className="overflow-x-auto mb-4 rounded-lg border border-gray-200 dark:border-gray-700">
                 <table className="w-full text-sm bg-white dark:bg-gray-900">
@@ -459,7 +569,6 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                 </pre>
               </details>
 
-              {/* CHANGE: added Cancel button for modal flow */}
               <div className="flex gap-3">
                 <button
                   onClick={saveTable}
