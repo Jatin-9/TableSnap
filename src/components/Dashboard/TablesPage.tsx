@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Filter, Download, Eye, Trash2, Calendar, Tag } from 'lucide-react';
 
-// ❌ CHANGE: removed UploadPage import (no longer needed)
+// CHANGE: removed UploadPage import (no longer needed)
 // import UploadPage from '../Upload/UploadPage';
 
 export default function TablesPage() {
@@ -26,14 +26,14 @@ export default function TablesPage() {
     'General',
   ];
 
-  // ✅ Existing: fetch on mount
+  //  Existing: fetch on mount
   useEffect(() => {
     if (user) {
       fetchSnapshots();
     }
   }, [user]);
 
-  // ✅ CHANGE: listen for upload success → refresh tables
+  //  CHANGE: listen for upload success → refresh tables
   useEffect(() => {
     const handler = () => fetchSnapshots();
 
@@ -44,7 +44,7 @@ export default function TablesPage() {
     };
   }, [user]);
 
-  // ✅ Existing: filter logic
+  //  Existing: filter logic
   useEffect(() => {
     if (selectedFilter === 'All') {
       setFilteredSnapshots(snapshots);
@@ -55,7 +55,7 @@ export default function TablesPage() {
     }
   }, [selectedFilter, snapshots]);
 
-  // ✅ IMPROVED: added error handling
+  //  IMPROVED: added error handling
   const fetchSnapshots = async () => {
     if (!user) return;
 
@@ -107,7 +107,7 @@ export default function TablesPage() {
     a.download = `table-${snapshot.id}.csv`;
     a.click();
 
-    // ✅ CHANGE: cleanup memory
+    //  CHANGE: cleanup memory
     window.URL.revokeObjectURL(url);
   };
 
@@ -122,7 +122,7 @@ export default function TablesPage() {
   return (
     <div className="p-6">
       
-      {/* ✅ CHANGE: Added Upload button here also (optional but useful) */}
+      {/*  CHANGE: Added Upload button here also (optional but useful) */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">
@@ -306,7 +306,7 @@ export default function TablesPage() {
 
               <button
                 onClick={() => setSelectedSnapshot(null)}
-                className="flex-1 bg-gray-200 py-3 rounded-lg"
+                className="flex-1 bg-gray-200 py-3 rounded-lg dark:bg-grey-200 dark:text-gray-900"
               >
                 Close
               </button>
