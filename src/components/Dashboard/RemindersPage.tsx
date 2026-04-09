@@ -98,7 +98,7 @@ export default function RemindersPage() {
                 <select
                   value={frequency}
                   onChange={(e) => setFrequency(e.target.value as 'daily' | 'weekly')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-400"
                 >
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
@@ -114,7 +114,7 @@ export default function RemindersPage() {
                   onChange={(e) =>
                     setDeliveryMethod(e.target.value as 'email' | 'notification')
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-400"
                 >
                   <option value="email">Email</option>
                   <option value="notification">Notification</option>
