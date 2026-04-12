@@ -28,6 +28,10 @@ export type TableSnapshot = {
   column_count: number;
   created_at: string;
 
+  // A user-set friendly name for this table. When null, the UI falls back
+  // to showing the column names joined together as the title.
+  title?: string | null;
+
   // New optional metadata
   dataset_type?: 'language' | 'general' | null;
   language_code?: string | null;

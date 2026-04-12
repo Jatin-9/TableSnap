@@ -11,7 +11,8 @@ import {
   Moon,
   Sun,
   Loader2,
-  Plus, // CHANGE: added Plus icon for upload button
+  Plus,
+  MessageSquare, // Used for the "Ask AI" nav item
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -95,6 +96,8 @@ export default function Sidebar() {
   const navItems = [
     { to: '/dashboard', icon: Table2, label: 'My Tables' },
     { to: '/dashboard/analytics', icon: BarChart3, label: 'My Analytics' },
+    // "Ask AI" takes the user to the Natural Language Query chatbox
+    { to: '/dashboard/query', icon: MessageSquare, label: 'Ask AI' },
     { to: '/dashboard/reminders', icon: Bell, label: 'Reminders' },
     { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
   ];

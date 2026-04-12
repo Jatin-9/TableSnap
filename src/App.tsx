@@ -7,6 +7,7 @@ import TablesPage from './components/Dashboard/TablesPage';
 import AnalyticsPage from './components/Dashboard/AnalyticsPage';
 import RemindersPage from './components/Dashboard/RemindersPage';
 import SettingsPage from './components/Dashboard/SettingsPage';
+import NLQPage from './components/Dashboard/NLQPage';
 import SuperAdminPage from './components/SuperAdmin/SuperAdminPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -32,6 +33,8 @@ function App() {
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="reminders" element={<RemindersPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              {/* Natural Language Query page — lets users chat with their table data */}
+              <Route path="query" element={<NLQPage />} />
             </Route>
 
             <Route
