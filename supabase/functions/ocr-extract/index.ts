@@ -60,7 +60,9 @@ type EnrichedTable = {
 type ValidationResult = {
   isValid: boolean;
   warnings: string[];
-  correctedRows?: Record<string, string>[];
+  // correctedRows is intentionally removed. The validator flags problems via
+  // warnings only. Row rewrites caused silent row loss when the AI returned
+  // fewer rows than the original table. merged.rows is always the source of truth.
 };
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -681,19 +683,16 @@ You are validating an enriched language-learning table.
 Return ONLY valid JSON:
 {
   "isValid": true,
-  "warnings": [],
-  "correctedRows": []
+  "warnings": []
 }
 
 RULES:
 - Check whether each row is internally consistent across all columns.
 - Focus on meaningful mismatches — e.g. the romaji doesn't match the hiragana.
 - Ignore minor capitalisation or punctuation differences.
-- If there are imperfections, prefer adding a warning over marking isValid as false.
-- Only set isValid to false for genuine semantic errors.
-- correctedRows may be returned only when a fix is obvious and safe.
-  If returning correctedRows, return the FULL row including all columns, not just the changed ones.
-- All values in correctedRows must be strings.
+- If there are imperfections, add a short warning string describing the issue.
+- Only set isValid to false for genuine semantic errors that affect all rows.
+- Do NOT return correctedRows. Do NOT rewrite any row data.
 - Return JSON only. No explanation.
 
 Language: ${classification.languageName ?? "Unknown"}
@@ -713,12 +712,6 @@ ${JSON.stringify(table)}
   return {
     isValid: typeof parsed.isValid === "boolean" ? parsed.isValid : true,
     warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
-    correctedRows: Array.isArray(parsed.correctedRows)
-      ? normalizeRows(
-          parsed.correctedRows as Record<string, unknown>[],
-          table.columns ?? [],
-        )
-      : undefined,
   };
 }
 
@@ -821,19 +814,15 @@ Deno.serve(async (req) => {
           );
           enriched = merged;
 
-          // Step 6: Validate consistency across all columns
+          // Step 6: Validate consistency across all columns.
+          // The validator only flags warnings — it never rewrites rows.
+          // merged.rows is always used as the final row source.
           const validated = await validateLanguageTable(merged, classification);
           validation = validated;
 
-          // If the validator found and fixed rows, use those. Otherwise keep merged.
-          const finalRows =
-            validated.correctedRows && validated.correctedRows.length > 0
-              ? validated.correctedRows
-              : merged.rows;
-
           finalTable = {
             columns: merged.columns,
-            rows: finalRows,
+            rows: merged.rows,
             addedColumns: merged.addedColumns ?? [],
           };
         }
