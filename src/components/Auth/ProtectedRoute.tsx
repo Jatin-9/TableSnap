@@ -10,11 +10,11 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
   const { user, supabaseUser, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    // Return null instead of a spinner — the auth check reads from localStorage
+    // and completes in under 50ms, so a spinner would just flash and disappear,
+    // which looks worse than showing nothing. The page's own skeleton handles
+    // the visible loading state once the auth check is done.
+    return null;
   }
 
   if (!supabaseUser) {
@@ -23,11 +23,8 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
 
   if (requireAdmin) {
     if (!user) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      );
+      // Same reasoning — return null while the admin role check resolves
+      return null;
     }
 
     if (user.role !== 'super_admin') {

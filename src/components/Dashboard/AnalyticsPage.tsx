@@ -15,8 +15,9 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Camera, TrendingUp, Table2, AlignJustify, Globe, Star } from 'lucide-react';
+import { Camera, Table2, AlignJustify, Globe, Star } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { StatCardSkeleton, ChartSkeleton } from '../ui/Skeleton';
 
 ChartJS.register(
   CategoryScale,
@@ -268,9 +269,39 @@ export default function AnalyticsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
+    // Render a skeleton that matches the exact layout of the real analytics page.
+    // The user sees stat card shapes and chart box shapes instantly —
+    // no full-screen spinner, no blank white page.
     return (
-      <div className="p-6 flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="p-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="animate-pulse h-8 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg mb-2" />
+            <div className="animate-pulse h-4 w-56 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+          </div>
+          <div className="animate-pulse h-10 w-36 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+        </div>
+
+        {/* Four stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+
+        {/* Top row — two charts side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <ChartSkeleton height="h-64" />
+          <ChartSkeleton height="h-64" />
+        </div>
+
+        {/* Bottom row — two charts side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartSkeleton height="h-64" />
+          <ChartSkeleton height="h-64" />
+        </div>
       </div>
     );
   }

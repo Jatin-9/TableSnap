@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X } from 'lucide-react';
+import { TableCardSkeleton } from '../ui/Skeleton';
 
 export default function TablesPage() {
   const { user } = useAuth();
@@ -259,8 +260,12 @@ export default function TablesPage() {
 
       {/* Table cards list */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        // Show 4 skeleton cards that match the shape of real table cards.
+        // The user sees the layout immediately and understands what's loading.
+        <div className="grid gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <TableCardSkeleton key={i} />
+          ))}
         </div>
       ) : filteredSnapshots.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center dark:bg-gray-900">
