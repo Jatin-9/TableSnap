@@ -204,7 +204,16 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
       languageName,
       languageCode,
       detectedLanguages,
-      validationWarnings: Array.isArray(validation.warnings) ? validation.warnings : [],
+      // The AI sometimes returns warning objects like { row, message } instead of
+      // plain strings. Coerce everything to a string here so the render never
+      // tries to put a raw object inside a <li> and crash React.
+      validationWarnings: Array.isArray(validation.warnings)
+        ? validation.warnings.map((w: unknown) => {
+            if (typeof w === 'string') return w;
+            if (typeof w === 'object' && w !== null && 'message' in w) return String((w as Record<string, unknown>).message);
+            return JSON.stringify(w);
+          })
+        : [],
       addedColumns,
     };
   };
@@ -266,109 +275,109 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     const pendingItems = imageQueue.filter((item) => item.status === 'pending');
     const totalBatches = Math.ceil(pendingItems.length / BATCH_SIZE);
 
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      // Slice out the current batch from the pending list
-      const batch = pendingItems.slice(
-        batchIndex * BATCH_SIZE,
-        (batchIndex + 1) * BATCH_SIZE
-      );
+    // Wrap everything in try/finally so isProcessing and batchInfo are ALWAYS
+    // reset — even if something unexpected throws inside the loop.
+    try {
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        // Slice out the current batch from the pending list
+        const batch = pendingItems.slice(
+          batchIndex * BATCH_SIZE,
+          (batchIndex + 1) * BATCH_SIZE
+        );
 
-      // Tell the UI which batch we're on
-      setBatchInfo({ current: batchIndex + 1, total: totalBatches });
+        // Tell the UI which batch we're on
+        setBatchInfo({ current: batchIndex + 1, total: totalBatches });
 
-      // Mark every image in this batch as "processing" before we start
-      batch.forEach((item) => {
-        updateItem(item.id, { status: 'processing', statusMsg: 'Extracting...' });
-      });
-
-      // ── Stage 1: Fast pass for all images in this batch, in parallel ──────
-      // Promise.all fires all requests at the same time and waits for all to finish.
-      // Each image's fast result appears on screen the moment its own promise resolves.
-      const fastResults: FastPassResult[] = await Promise.all(
-        batch.map(async (item): Promise<FastPassResult> => {
-          try {
-            const imageBase64 = await fileToBase64(item.file);
-            const fastResult = await callPipeline(imageBase64, 'fast');
-            const fastData = buildExtractedDataFromResult(fastResult);
-
-            // Show the fast result right away — don't wait for enrichment
-            updateItem(item.id, { data: fastData });
-
-            return { item, imageBase64, fastData, success: true };
-          } catch (err) {
-            updateItem(item.id, {
-              status: 'error',
-              statusMsg: 'Extraction failed',
-              errorMsg: err instanceof Error ? err.message : 'Unknown error',
-            });
-            return { item, imageBase64: '', fastData: null, success: false };
-          }
-        })
-      );
-
-      // Mark non-language successful images as done — they don't need enrichment
-      fastResults
-        .filter((r) => r.success && r.fastData?.datasetType !== 'language')
-        .forEach(({ item }) => {
-          updateItem(item.id, { status: 'done', statusMsg: 'Table extracted successfully' });
+        // Mark every image in this batch as "processing" before we start
+        batch.forEach((item) => {
+          updateItem(item.id, { status: 'processing', statusMsg: 'Extracting...' });
         });
 
-      // ── Stage 2: Full pass for language tables in this batch, in parallel ─
-      // Only language tables need the full enrichment pipeline.
-      // We reuse the imageBase64 we already computed in stage 1 — no re-reading.
-      const languageResults = fastResults.filter(
-        (r) => r.success && r.fastData?.datasetType === 'language'
-      );
-
-      if (languageResults.length > 0) {
-        // Update status to show enrichment is happening
-        languageResults.forEach(({ item, fastData }) => {
-          const langName = fastData?.languageName || 'detected language';
-          updateItem(item.id, {
-            statusMsg: `Enriching ${langName} table...`,
-          });
-        });
-
-        // Run all full passes in parallel — same pattern as the fast pass above
-        await Promise.all(
-          languageResults.map(async ({ item, imageBase64, fastData }) => {
+        // ── Stage 1: Fast pass for all images in this batch, in parallel ────
+        // Promise.all fires all requests at the same time and waits for all
+        // to finish. Each image's quick result appears as soon as it resolves.
+        const fastResults: FastPassResult[] = await Promise.all(
+          batch.map(async (item): Promise<FastPassResult> => {
             try {
-              const fullResult = await callPipeline(imageBase64, 'full');
-              const fullData = buildExtractedDataFromResult(fullResult);
+              const imageBase64 = await fileToBase64(item.file);
+              const fastResult = await callPipeline(imageBase64, 'fast');
+              const fastData = buildExtractedDataFromResult(fastResult);
 
-              // Only upgrade to the full result if it actually has usable data
-              if (fullData.tableData.length > 0 && fullData.columnNames.length > 0) {
-                updateItem(item.id, {
-                  data: fullData,
-                  status: 'done',
-                  statusMsg:
-                    fullData.addedColumns && fullData.addedColumns.length > 0
-                      ? `Enriched with ${fullData.addedColumns.join(', ')}`
-                      : `Extracted (${fastData?.languageName || 'language'})`,
-                });
-              } else {
-                // Full pass returned nothing useful — keep the fast result
-                updateItem(item.id, {
-                  status: 'done',
-                  statusMsg: `Extracted (${fastData?.languageName || 'language'})`,
-                });
-              }
-            } catch (_err) {
-              // Enrichment failed but we still have the fast result — that's fine
-              // Don't mark as error, the user still has usable data
+              // Show the fast result right away — don't wait for enrichment
+              updateItem(item.id, { data: fastData });
+
+              return { item, imageBase64, fastData, success: true };
+            } catch (err) {
               updateItem(item.id, {
-                status: 'done',
-                statusMsg: 'Shown fast result (enrichment failed)',
+                status: 'error',
+                statusMsg: 'Extraction failed',
+                errorMsg: err instanceof Error ? err.message : 'Unknown error',
               });
+              return { item, imageBase64: '', fastData: null, success: false };
             }
           })
         );
-      }
-    }
 
-    // All batches done — clear the batch indicator
-    setBatchInfo(null);
-    setIsProcessing(false);
+        // Mark non-language images as done — they don't need enrichment
+        fastResults
+          .filter((r) => r.success && r.fastData?.datasetType !== 'language')
+          .forEach(({ item }) => {
+            updateItem(item.id, { status: 'done', statusMsg: 'Table extracted successfully' });
+          });
+
+        // ── Stage 2: Full pass for language tables — one at a time ──────────
+        // We intentionally process enrichments sequentially here, not in parallel.
+        // Running all 4 full pipelines simultaneously (28 OpenAI calls at once)
+        // can overwhelm Supabase's edge function concurrency and cause timeouts.
+        // Sequential enrichment is slower but stable — the user already has the
+        // fast result to look at while each image enriches in turn.
+        const languageResults = fastResults.filter(
+          (r) => r.success && r.fastData?.datasetType === 'language'
+        );
+
+        for (const { item, imageBase64, fastData } of languageResults) {
+          const langName = fastData?.languageName || 'detected language';
+          updateItem(item.id, { statusMsg: `Enriching ${langName} table...` });
+
+          try {
+            const fullResult = await callPipeline(imageBase64, 'full');
+            const fullData = buildExtractedDataFromResult(fullResult);
+
+            // Only upgrade to the full result if it actually has usable data
+            if (fullData.tableData.length > 0 && fullData.columnNames.length > 0) {
+              updateItem(item.id, {
+                data: fullData,
+                status: 'done',
+                statusMsg:
+                  fullData.addedColumns && fullData.addedColumns.length > 0
+                    ? `Enriched with ${fullData.addedColumns.join(', ')}`
+                    : `Extracted (${fastData?.languageName || 'language'})`,
+              });
+            } else {
+              // Full pass returned nothing useful — keep the fast result
+              updateItem(item.id, {
+                status: 'done',
+                statusMsg: `Extracted (${fastData?.languageName || 'language'})`,
+              });
+            }
+          } catch (_err) {
+            // Enrichment failed but the user still has the fast result — keep it
+            updateItem(item.id, {
+              status: 'done',
+              statusMsg: 'Shown fast result (enrichment failed)',
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Something unexpected escaped all the inner catches — log it but don't
+      // leave the UI stuck in a "processing" state forever
+      console.error('Unexpected error in processAll:', err);
+    } finally {
+      // Always runs — even if the try block threw
+      setBatchInfo(null);
+      setIsProcessing(false);
+    }
   };
 
   // ─── Save a single table ──────────────────────────────────────────────────
