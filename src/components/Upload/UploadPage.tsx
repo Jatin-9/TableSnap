@@ -34,38 +34,48 @@ type ExtractedData = {
   addedColumns?: string[];
 };
 
-// Each image in the queue goes through these states:
-// pending  → the user selected it but OCR hasn't started yet
-// processing → OCR is actively running for this image
-// done     → OCR finished successfully (data is populated)
-// error    → OCR failed (errorMsg is populated)
 type QueueStatus = 'pending' | 'processing' | 'done' | 'error';
 
 type ImageQueueItem = {
-  // Unique ID so React can keep track of each item in the list
   id: string;
   file: File;
-  // A data-URL (base64) used to show the thumbnail preview
   preview: string;
   status: QueueStatus;
-  // The extracted table data — null until OCR finishes
   data: ExtractedData | null;
-  // Human-readable status message shown below each thumbnail
   statusMsg: string;
   errorMsg: string;
 };
 
+// The result of processing one image through the fast pass.
+// We store imageBase64 here so the full pass can reuse it without re-reading the file.
+type FastPassResult = {
+  item: ImageQueueItem;
+  imageBase64: string;
+  fastData: ExtractedData | null;
+  success: boolean;
+};
+
+// How many images we process at the same time.
+// 4 is safe for 500 RPM — each image makes 7 calls max, so 4 images = 28 calls,
+// well within the per-minute limit even with some headroom for retries.
+const BATCH_SIZE = 4;
+
+// Hard cap on how many images a user can queue in one session.
+// Keeps UI manageable and prevents accidental rate limit abuse.
+const MAX_IMAGES = 10;
+
 export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
-  // imageQueue holds every image the user has selected, along with its current state
   const [imageQueue, setImageQueue] = useState<ImageQueueItem[]>([]);
-  // isProcessing is true while the OCR pipeline is running (disables buttons)
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Tracks which batch we are currently on so we can show progress to the user.
+  // null means no processing is happening right now.
+  const [batchInfo, setBatchInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { user } = useAuth();
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  // Wraps FileReader in a Promise so we can use async/await with it
   const fileToBase64 = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -74,7 +84,6 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
       reader.onerror = reject;
     });
 
-  // Generates preview URLs for all selected files and adds them to the queue
   const readPreviewsAndEnqueue = async (files: File[]) => {
     const newItems: ImageQueueItem[] = await Promise.all(
       files.map(async (file) => {
@@ -90,25 +99,20 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         };
       })
     );
-
-    // Append to existing queue so users can keep adding more images
     setImageQueue((prev) => [...prev, ...newItems]);
   };
 
-  // Removes a single image from the queue before processing starts
   const removeFromQueue = (id: string) => {
     setImageQueue((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Clears the entire queue and resets the page to its initial state
   const resetAll = () => {
     setImageQueue([]);
+    setBatchInfo(null);
   };
 
-  // ─── Tag detection ───────────────────────────────────────────────────────────
+  // ─── Tag detection ────────────────────────────────────────────────────────
 
-  // Looks at the extracted text and column names to auto-assign category tags.
-  // This runs entirely on the frontend — no AI needed for this step.
   const detectTags = (text: string, columns: string[]): string[] => {
     const tags: string[] = [];
     const lowerText = text.toLowerCase();
@@ -126,10 +130,6 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     return tags.length > 0 ? tags : ['General'];
   };
 
-  // ─── Column visibility filter ────────────────────────────────────────────────
-
-  // AI sometimes adds extra columns that end up completely empty.
-  // This hides those empty AI-added columns while always keeping original columns.
   const filterVisibleColumns = (
     allColumns: string[],
     rows: Record<string, string>[],
@@ -141,10 +141,8 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     });
   };
 
-  // ─── Pipeline result normalizer ──────────────────────────────────────────────
+  // ─── Pipeline result normaliser ───────────────────────────────────────────
 
-  // Takes the raw JSON from the OCR edge function and converts it into our
-  // clean ExtractedData shape. Both "fast" and "full" responses go through this.
   const buildExtractedDataFromResult = (result: any): ExtractedData => {
     const finalTable = result?.final;
     const classification: PipelineClassification = result?.classification ?? {};
@@ -186,9 +184,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
 
     const visibleRows = normalizedRows.map((row) => {
       const filteredRow: Record<string, string> = {};
-      visibleColumns.forEach((col) => {
-        filteredRow[col] = row[col] ?? '';
-      });
+      visibleColumns.forEach((col) => { filteredRow[col] = row[col] ?? ''; });
       return filteredRow;
     });
 
@@ -213,11 +209,8 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     };
   };
 
-  // ─── OCR pipeline call ───────────────────────────────────────────────────────
+  // ─── Edge function call ───────────────────────────────────────────────────
 
-  // Calls the Supabase edge function with a single image.
-  // mode = "fast" → quick first pass (always run)
-  // mode = "full" → enrichment pass (only for language tables)
   const callPipeline = async (imageBase64: string, mode: 'fast' | 'full') => {
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
@@ -230,19 +223,17 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         body: JSON.stringify({ imageBase64, mode }),
       }
     );
-
     const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(`OCR failed (${response.status}): ${responseText}`);
-    }
+    if (!response.ok) throw new Error(`OCR failed (${response.status}): ${responseText}`);
     return JSON.parse(responseText);
   };
 
-  // ─── Queue item state updater ────────────────────────────────────────────────
+  // ─── Queue item updater ───────────────────────────────────────────────────
 
-  // A small helper that updates a single item in the queue by its ID.
-  // Using a function like this instead of duplicating the map() logic everywhere
-  // keeps the code DRY and easier to read.
+  // Updates one item in the queue by ID without touching the others.
+  // We always use the functional form of setState (prev => ...) here so that
+  // parallel updates from Promise.all don't overwrite each other — each update
+  // receives the latest state rather than a stale snapshot.
   const updateItem = (
     id: string,
     patch: Partial<Omit<ImageQueueItem, 'id' | 'file' | 'preview'>>
@@ -252,83 +243,136 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     );
   };
 
-  // ─── Process all images ──────────────────────────────────────────────────────
+  // ─── Parallel batch processor ─────────────────────────────────────────────
 
-  // Loops through every pending image in the queue and runs the OCR pipeline
-  // on each one sequentially. We do them one-at-a-time (not parallel) to avoid
-  // hammering the OpenAI API and blowing through rate limits.
+  // This is the core of the parallel processing. Here's the strategy:
+  //
+  // 1. Split all pending images into batches of BATCH_SIZE (4).
+  // 2. For each batch, run ALL fast passes in parallel using Promise.all.
+  //    Fast pass = the quick first extraction. Results appear simultaneously.
+  // 3. After all fast passes in the batch complete, run ALL full passes
+  //    (enrichment) for the language tables in parallel using Promise.all.
+  // 4. Move to the next batch.
+  //
+  // Why two stages (fast then full) within each batch?
+  // Because we want the user to see all 4 quick results appear at once,
+  // then see the enriched versions appear together — rather than waiting for
+  // one full pipeline before starting the next image.
+
   const processAll = async () => {
     if (!user) return;
-
     setIsProcessing(true);
 
     const pendingItems = imageQueue.filter((item) => item.status === 'pending');
+    const totalBatches = Math.ceil(pendingItems.length / BATCH_SIZE);
 
-    for (const item of pendingItems) {
-      // Mark this image as "in progress" so the user can see which one is running
-      updateItem(item.id, { status: 'processing', statusMsg: 'Extracting table...' });
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      // Slice out the current batch from the pending list
+      const batch = pendingItems.slice(
+        batchIndex * BATCH_SIZE,
+        (batchIndex + 1) * BATCH_SIZE
+      );
 
-      try {
-        const imageBase64 = await fileToBase64(item.file);
+      // Tell the UI which batch we're on
+      setBatchInfo({ current: batchIndex + 1, total: totalBatches });
 
-        // ── Fast pass: always run, shows results quickly ──
-        const fastResult = await callPipeline(imageBase64, 'fast');
-        const fastData = buildExtractedDataFromResult(fastResult);
+      // Mark every image in this batch as "processing" before we start
+      batch.forEach((item) => {
+        updateItem(item.id, { status: 'processing', statusMsg: 'Extracting...' });
+      });
 
-        // Show the fast result immediately so the user isn't staring at a spinner
-        updateItem(item.id, { data: fastData });
+      // ── Stage 1: Fast pass for all images in this batch, in parallel ──────
+      // Promise.all fires all requests at the same time and waits for all to finish.
+      // Each image's fast result appears on screen the moment its own promise resolves.
+      const fastResults: FastPassResult[] = await Promise.all(
+        batch.map(async (item): Promise<FastPassResult> => {
+          try {
+            const imageBase64 = await fileToBase64(item.file);
+            const fastResult = await callPipeline(imageBase64, 'fast');
+            const fastData = buildExtractedDataFromResult(fastResult);
 
-        const isLanguage = fastData.datasetType === 'language';
+            // Show the fast result right away — don't wait for enrichment
+            updateItem(item.id, { data: fastData });
 
-        if (isLanguage) {
-          const langName = fastData.languageName || 'detected language';
-          updateItem(item.id, {
-            statusMsg: `Language table (${langName}) — enriching...`,
-          });
-
-          // ── Full pass: only for language tables, adds extra columns ──
-          const fullResult = await callPipeline(imageBase64, 'full');
-          const fullData = buildExtractedDataFromResult(fullResult);
-
-          // Only swap out the fast result if the full result actually has data
-          if (fullData.tableData.length > 0 && fullData.columnNames.length > 0) {
+            return { item, imageBase64, fastData, success: true };
+          } catch (err) {
             updateItem(item.id, {
-              data: fullData,
-              status: 'done',
-              statusMsg:
-                fullData.addedColumns && fullData.addedColumns.length > 0
-                  ? `Enriched with ${fullData.addedColumns.join(', ')}`
-                  : `Language data extracted (${langName})`,
+              status: 'error',
+              statusMsg: 'Extraction failed',
+              errorMsg: err instanceof Error ? err.message : 'Unknown error',
             });
-          } else {
-            updateItem(item.id, {
-              status: 'done',
-              statusMsg: `Language data extracted (${langName})`,
-            });
+            return { item, imageBase64: '', fastData: null, success: false };
           }
-        } else {
-          updateItem(item.id, {
-            status: 'done',
-            statusMsg: 'Table extracted successfully',
-          });
-        }
-      } catch (err) {
-        // If a single image fails, mark it as errored and continue with the rest
-        updateItem(item.id, {
-          status: 'error',
-          statusMsg: 'Extraction failed',
-          errorMsg: err instanceof Error ? err.message : 'Unknown error',
+        })
+      );
+
+      // Mark non-language successful images as done — they don't need enrichment
+      fastResults
+        .filter((r) => r.success && r.fastData?.datasetType !== 'language')
+        .forEach(({ item }) => {
+          updateItem(item.id, { status: 'done', statusMsg: 'Table extracted successfully' });
         });
+
+      // ── Stage 2: Full pass for language tables in this batch, in parallel ─
+      // Only language tables need the full enrichment pipeline.
+      // We reuse the imageBase64 we already computed in stage 1 — no re-reading.
+      const languageResults = fastResults.filter(
+        (r) => r.success && r.fastData?.datasetType === 'language'
+      );
+
+      if (languageResults.length > 0) {
+        // Update status to show enrichment is happening
+        languageResults.forEach(({ item, fastData }) => {
+          const langName = fastData?.languageName || 'detected language';
+          updateItem(item.id, {
+            statusMsg: `Enriching ${langName} table...`,
+          });
+        });
+
+        // Run all full passes in parallel — same pattern as the fast pass above
+        await Promise.all(
+          languageResults.map(async ({ item, imageBase64, fastData }) => {
+            try {
+              const fullResult = await callPipeline(imageBase64, 'full');
+              const fullData = buildExtractedDataFromResult(fullResult);
+
+              // Only upgrade to the full result if it actually has usable data
+              if (fullData.tableData.length > 0 && fullData.columnNames.length > 0) {
+                updateItem(item.id, {
+                  data: fullData,
+                  status: 'done',
+                  statusMsg:
+                    fullData.addedColumns && fullData.addedColumns.length > 0
+                      ? `Enriched with ${fullData.addedColumns.join(', ')}`
+                      : `Extracted (${fastData?.languageName || 'language'})`,
+                });
+              } else {
+                // Full pass returned nothing useful — keep the fast result
+                updateItem(item.id, {
+                  status: 'done',
+                  statusMsg: `Extracted (${fastData?.languageName || 'language'})`,
+                });
+              }
+            } catch (_err) {
+              // Enrichment failed but we still have the fast result — that's fine
+              // Don't mark as error, the user still has usable data
+              updateItem(item.id, {
+                status: 'done',
+                statusMsg: 'Shown fast result (enrichment failed)',
+              });
+            }
+          })
+        );
       }
     }
 
+    // All batches done — clear the batch indicator
+    setBatchInfo(null);
     setIsProcessing(false);
   };
 
-  // ─── Save a single table ─────────────────────────────────────────────────────
+  // ─── Save a single table ──────────────────────────────────────────────────
 
-  // Persists one extracted table to Supabase. Called either by "Save All" or
-  // by an individual save button on each result card.
   const saveSingleTable = async (data: ExtractedData): Promise<boolean> => {
     if (!user) return false;
 
@@ -349,28 +393,21 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     };
 
     const { error } = await supabase.from('table_snapshots').insert(payload);
-    if (error) {
-      console.error('Supabase insert error:', error);
-      return false;
-    }
+    if (error) { console.error('Supabase insert error:', error); return false; }
     return true;
   };
-
-  // ─── Save all successfully extracted tables ──────────────────────────────────
 
   const saveAll = async () => {
     if (!user) return;
 
-    // Only save images that completed OCR and actually have row data
     const readyItems = imageQueue.filter(
       (item) => item.status === 'done' && item.data && item.data.tableData.length > 0
     );
-
     if (readyItems.length === 0) return;
 
     setIsProcessing(true);
-
     let savedCount = 0;
+
     for (const item of readyItems) {
       const success = await saveSingleTable(item.data!);
       if (success) savedCount++;
@@ -386,34 +423,53 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     }
   };
 
-  // ─── File input handler ──────────────────────────────────────────────────────
+  // ─── File input handler ───────────────────────────────────────────────────
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files ?? []);
-
-    // Filter to only image files and warn the user if any non-images slipped in
     const imageFiles = selectedFiles.filter((f) => f.type.startsWith('image/'));
+
     if (imageFiles.length < selectedFiles.length) {
       alert('Some files were skipped — only image files are accepted.');
     }
 
-    if (imageFiles.length === 0) return;
+    // Work out how many slots are left before we hit the cap
+    const currentCount = imageQueue.length;
+    const remainingSlots = MAX_IMAGES - currentCount;
 
-    readPreviewsAndEnqueue(imageFiles);
+    if (remainingSlots <= 0) {
+      alert(`You've reached the maximum of ${MAX_IMAGES} images per session.`);
+      e.target.value = '';
+      return;
+    }
 
+    // Trim the selection down to what fits
+    const filesToAdd = imageFiles.slice(0, remainingSlots);
+
+    if (imageFiles.length > remainingSlots) {
+      alert(
+        `Only ${remainingSlots} more image${remainingSlots !== 1 ? 's' : ''} can be added ` +
+        `(max ${MAX_IMAGES} total). The first ${remainingSlots} were selected.`
+      );
+    }
+
+    if (filesToAdd.length === 0) { e.target.value = ''; return; }
+
+    readPreviewsAndEnqueue(filesToAdd);
     // Reset the input so the same file can be selected again if needed
     e.target.value = '';
   };
 
-  // ─── Derived state ───────────────────────────────────────────────────────────
+  // ─── Derived state ────────────────────────────────────────────────────────
 
   const pendingCount = imageQueue.filter((i) => i.status === 'pending').length;
   const doneCount = imageQueue.filter((i) => i.status === 'done').length;
   const readyToSave = imageQueue.filter(
     (i) => i.status === 'done' && i.data && i.data.tableData.length > 0
   ).length;
+  const remainingSlots = MAX_IMAGES - imageQueue.length;
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-6">
@@ -426,14 +482,13 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
               Upload Table Images
             </h1>
             <p className="text-gray-600 dark:text-gray-300">
-              Select one or more images — each table is extracted using AI
+              Select up to {MAX_IMAGES} images — processed {BATCH_SIZE} at a time in parallel
             </p>
           </div>
-
           {onClose && (
             <button
               onClick={onClose}
-              className="inline-flex items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="inline-flex items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               aria-label="Close upload modal"
             >
               <X className="w-5 h-5" />
@@ -441,41 +496,79 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           )}
         </div>
 
-        {/* Drop zone — always visible so the user can keep adding images */}
+        {/* Drop zone */}
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800 mb-6">
-          <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
-            Extraction mode: <span className="font-semibold">Fast + Enrichment pipeline</span>
+
+          {/* Status bar */}
+          <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-3">
+            <span>
+              Mode: <span className="font-semibold">Fast + Enrichment — {BATCH_SIZE} images in parallel</span>
+            </span>
             {imageQueue.length > 0 && (
-              <span className="ml-3 text-blue-600 dark:text-blue-400 font-semibold">
-                {imageQueue.length} image{imageQueue.length > 1 ? 's' : ''} selected
+              <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                {imageQueue.length}/{MAX_IMAGES} images selected
                 {doneCount > 0 && ` · ${doneCount} extracted`}
+              </span>
+            )}
+            {/* Remaining slots badge */}
+            {imageQueue.length > 0 && remainingSlots > 0 && (
+              <span className="text-gray-400 dark:text-gray-500">
+                ({remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} left)
               </span>
             )}
           </div>
 
-          {/* Clickable drop zone */}
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer dark:border-gray-700 dark:hover:border-blue-500">
-            <input
-              type="file"
-              accept="image/*"
-              multiple              // ← This is the key change: allows selecting many files at once
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload"
-              disabled={isProcessing}
-            />
-            <label htmlFor="file-upload" className="cursor-pointer">
-              <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4 dark:text-gray-500" />
-              <p className="text-gray-600 mb-2 dark:text-gray-300">
-                Click to select images <span className="text-blue-600 font-medium dark:text-blue-400">(you can pick multiple)</span>
+          {/* Clickable drop zone — hidden when at cap */}
+          {remainingSlots > 0 ? (
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer dark:border-gray-700 dark:hover:border-blue-500">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+                id="file-upload"
+                disabled={isProcessing}
+              />
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4 dark:text-gray-500" />
+                <p className="text-gray-600 mb-2 dark:text-gray-300">
+                  Click to select images{' '}
+                  <span className="text-blue-600 font-medium dark:text-blue-400">
+                    (up to {remainingSlots} more)
+                  </span>
+                </p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">PNG, JPG, WEBP up to 10MB each</p>
+              </label>
+            </div>
+          ) : (
+            // Show a "cap reached" notice instead of the drop zone
+            <div className="border-2 border-dashed border-amber-300 rounded-xl p-6 text-center bg-amber-50 dark:bg-amber-900/10 dark:border-amber-700">
+              <p className="text-amber-700 dark:text-amber-400 font-medium">
+                Maximum of {MAX_IMAGES} images reached
               </p>
-              <p className="text-sm text-gray-400 dark:text-gray-500">
-                PNG, JPG, WEBP up to 10MB each
+              <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
+                Extract and save these, then you can add more
               </p>
-            </label>
-          </div>
+            </div>
+          )}
 
-          {/* Action buttons — shown once at least one image is queued */}
+          {/* Batch progress indicator — appears while processing */}
+          {batchInfo && (
+            <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/10 dark:border-blue-800">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-500 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                  Batch {batchInfo.current} of {batchInfo.total}
+                </p>
+                <p className="text-xs text-blue-500 dark:text-blue-400">
+                  Processing up to {BATCH_SIZE} images in parallel
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
           {imageQueue.length > 0 && (
             <div className="mt-4 flex gap-3 flex-wrap">
               {pendingCount > 0 && (
@@ -485,15 +578,9 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
                   ) : (
-                    <>
-                      <Upload className="w-5 h-5" />
-                      Extract {pendingCount} Image{pendingCount > 1 ? 's' : ''}
-                    </>
+                    <><Upload className="w-5 h-5" /> Extract {pendingCount} Image{pendingCount !== 1 ? 's' : ''}</>
                   )}
                 </button>
               )}
@@ -504,7 +591,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                   disabled={isProcessing}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isProcessing ? 'Saving...' : `Save ${readyToSave} Table${readyToSave > 1 ? 's' : ''}`}
+                  {isProcessing ? 'Saving...' : `Save ${readyToSave} Table${readyToSave !== 1 ? 's' : ''}`}
                 </button>
               )}
 
@@ -520,7 +607,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           )}
         </div>
 
-        {/* Results — one card per image, stacked vertically */}
+        {/* Results — one card per image */}
         {imageQueue.length > 0 && (
           <div className="space-y-6">
             {imageQueue.map((item, index) => (
@@ -528,21 +615,18 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                 key={item.id}
                 className="bg-white rounded-2xl shadow-lg border border-gray-200 dark:bg-gray-900 dark:border-gray-800 overflow-hidden"
               >
-                {/* Card header: thumbnail + file name + status */}
+                {/* Card header */}
                 <div className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-gray-800">
-                  {/* Small thumbnail */}
                   <img
                     src={item.preview}
                     alt={item.file.name}
                     className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                   />
-
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-white truncate">
                       Image {index + 1}: {item.file.name}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      {/* Status icon changes depending on what stage we're in */}
                       {item.status === 'processing' && (
                         <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
                       )}
@@ -558,7 +642,6 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                     </div>
                   </div>
 
-                  {/* Only allow removing images that haven't started processing yet */}
                   {item.status === 'pending' && !isProcessing && (
                     <button
                       onClick={() => removeFromQueue(item.id)}
@@ -570,55 +653,43 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                   )}
                 </div>
 
-                {/* Error message if OCR failed */}
+                {/* Error message */}
                 {item.status === 'error' && item.errorMsg && (
                   <div className="p-4 bg-red-50 dark:bg-red-900/10 border-b border-red-200 dark:border-red-900/30">
                     <p className="text-sm text-red-700 dark:text-red-400">{item.errorMsg}</p>
                   </div>
                 )}
 
-                {/* Extracted data — shown once OCR produces a result */}
+                {/* Extracted data */}
                 {item.data && (
                   <div className="p-6">
-                    {/* Metadata badges */}
                     <div className="mb-4 flex flex-wrap gap-2 items-center">
                       <span className="text-sm font-semibold text-green-600 dark:text-green-400">
                         {item.data.confidence}% confidence
                       </span>
-
                       <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm dark:bg-gray-800 dark:text-gray-200">
                         {item.data.datasetType ?? 'general'}
                       </span>
-
                       {item.data.languageName && (
                         <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm dark:bg-purple-900/30 dark:text-purple-300">
                           {item.data.languageName}
                         </span>
                       )}
-
                       {item.data.addedColumns && item.data.addedColumns.length > 0 && (
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm dark:bg-green-900/30 dark:text-green-300">
                           Enriched: {item.data.addedColumns.join(', ')}
                         </span>
                       )}
-
-                      {/* Auto-detected tags */}
                       {item.data.autoTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm dark:bg-blue-900/30 dark:text-blue-300"
-                        >
+                        <span key={tag} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm dark:bg-blue-900/30 dark:text-blue-300">
                           {tag}
                         </span>
                       ))}
                     </div>
 
-                    {/* Validation warnings from the AI */}
                     {item.data.validationWarnings && item.data.validationWarnings.length > 0 && (
                       <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900/40 dark:bg-yellow-900/10">
-                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">
-                          Warnings
-                        </p>
+                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">Warnings</p>
                         <ul className="text-sm text-yellow-700 dark:text-yellow-200 space-y-1">
                           {item.data.validationWarnings.map((w, i) => (
                             <li key={i}>• {w}</li>
@@ -627,16 +698,12 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                       </div>
                     )}
 
-                    {/* Scrollable table preview */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                       <table className="w-full text-sm bg-white dark:bg-gray-900">
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-gray-700">
                             {item.data.columnNames.map((col) => (
-                              <th
-                                key={col}
-                                className="text-left p-2 font-semibold text-gray-900 dark:text-white"
-                              >
+                              <th key={col} className="text-left p-2 font-semibold text-gray-900 dark:text-white">
                                 {col}
                               </th>
                             ))}
@@ -645,10 +712,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                         <tbody>
                           {item.data.tableData.length > 0 ? (
                             item.data.tableData.map((row, rowIdx) => (
-                              <tr
-                                key={rowIdx}
-                                className="border-b border-gray-100 dark:border-gray-800"
-                              >
+                              <tr key={rowIdx} className="border-b border-gray-100 dark:border-gray-800">
                                 {item.data!.columnNames.map((col) => (
                                   <td key={col} className="p-2 text-gray-900 dark:text-gray-100">
                                     {row[col] ?? ''}
@@ -658,10 +722,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                             ))
                           ) : (
                             <tr>
-                              <td
-                                className="p-2 text-gray-500 dark:text-gray-400"
-                                colSpan={item.data.columnNames.length}
-                              >
+                              <td className="p-2 text-gray-500 dark:text-gray-400" colSpan={item.data.columnNames.length}>
                                 No table could be extracted from this image.
                               </td>
                             </tr>
@@ -676,7 +737,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           </div>
         )}
 
-        {/* Bottom Save All button — shown when results are ready, avoids scrolling back up */}
+        {/* Bottom save button */}
         {readyToSave > 0 && (
           <div className="mt-6 flex gap-3">
             <button
@@ -684,7 +745,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
               disabled={isProcessing}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
             >
-              {isProcessing ? 'Saving...' : `Save All ${readyToSave} Table${readyToSave > 1 ? 's' : ''} to My Tables`}
+              {isProcessing ? 'Saving...' : `Save All ${readyToSave} Table${readyToSave !== 1 ? 's' : ''} to My Tables`}
             </button>
             {onClose && (
               <button
