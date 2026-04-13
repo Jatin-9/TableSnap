@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import OpenAI from "npm:openai";
 
+
 const openai = new OpenAI({
   apiKey: Deno.env.get("OPENAI_API_KEY"),
 });

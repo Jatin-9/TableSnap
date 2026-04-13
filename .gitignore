@@ -21,3 +21,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Supabase CLI generates these locally — they contain your project ref and
+# database connection strings which should never be committed to git
+supabase/.temp/
