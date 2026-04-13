@@ -7,9 +7,16 @@ import { TableCardSkeleton } from '../ui/Skeleton';
 export default function TablesPage() {
   const { user } = useAuth();
   const [snapshots, setSnapshots] = useState<TableSnapshot[]>([]);
-  const [filteredSnapshots, setFilteredSnapshots] = useState<TableSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState('All');
+
+  // Derived directly from snapshots + selectedFilter — no useState or useEffect needed.
+  // React re-computes this on every render, so it's always in sync without any extra
+  // state update cycle. Storing it in useState would cause an extra render every time
+  // snapshots changed (setState in effect → render → effect → setState → render).
+  const filteredSnapshots = selectedFilter === 'All'
+    ? snapshots
+    : snapshots.filter((s) => s.auto_tags.includes(selectedFilter));
 
   // ── View modal state ──────────────────────────────────────────────────────
   // When non-null, shows the full table preview modal for that snapshot
@@ -31,25 +38,23 @@ export default function TablesPage() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
+  // Depend on user.id (a stable string) rather than the user object itself.
+  // The user object gets recreated on every fetchUserProfile call in AuthContext,
+  // so depending on the whole object would re-fetch the table list on every
+  // auth token refresh even though nothing about the user actually changed.
+  const userId = user?.id;
   useEffect(() => {
-    if (user) fetchSnapshots();
-  }, [user]);
+    if (userId) fetchSnapshots();
+  }, [userId]);
 
   // Listen for the custom event fired after a new table is saved so the list
-  // refreshes automatically without requiring a manual page reload
+  // refreshes automatically without requiring a manual page reload.
+  // No dependency on user — fetchSnapshots already guards with `if (!user) return`.
   useEffect(() => {
     const handler = () => fetchSnapshots();
     window.addEventListener('refresh-tables', handler);
     return () => window.removeEventListener('refresh-tables', handler);
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedFilter === 'All') {
-      setFilteredSnapshots(snapshots);
-    } else {
-      setFilteredSnapshots(snapshots.filter((s) => s.auto_tags.includes(selectedFilter)));
-    }
-  }, [selectedFilter, snapshots]);
+  }, []);
 
   const fetchSnapshots = async () => {
     if (!user) return;
@@ -64,7 +69,6 @@ export default function TablesPage() {
       console.error('Fetch snapshots error:', error);
     } else if (data) {
       setSnapshots(data);
-      setFilteredSnapshots(data);
     }
     setLoading(false);
   };

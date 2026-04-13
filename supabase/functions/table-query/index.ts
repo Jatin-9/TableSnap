@@ -32,6 +32,13 @@ type CompactTable = {
   language: string | null;
 };
 
+// A single message from the conversation history.
+// The frontend sends the last 10 messages so the AI remembers prior context.
+type HistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 Deno.serve(async (req) => {
   // Handle the CORS preflight request that browsers send before a real POST
   if (req.method === "OPTIONS") {
@@ -39,9 +46,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { question, tables } = await req.json() as {
+    const { question, tables, history } = await req.json() as {
       question?: string;
       tables?: CompactTable[];
+      history?: HistoryMessage[];
     };
 
     if (!question || typeof question !== "string") {
@@ -93,10 +101,27 @@ Rules for answering:
 - Keep answers concise and direct.
 - If multiple tables are relevant, mention all of them.`;
 
+    // Build the messages array that OpenAI receives:
+    // 1. System prompt (table context + instructions) — always first
+    // 2. Conversation history — the last N messages so the AI has memory
+    // 3. The new user question — always last
+    //
+    // This is how OpenAI's chat API works: it reads the messages in order,
+    // so putting history between the system prompt and the new question gives
+    // the AI full context about what was already discussed.
+    const historyMessages = Array.isArray(history)
+      ? history
+          // Safety: only allow valid roles, only accept strings
+          .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+          .map((m) => ({ role: m.role, content: m.content }))
+      : [];
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
+        // History goes here — between system context and the new question
+        ...historyMessages,
         { role: "user", content: question },
       ],
       // A lower temperature makes the AI more precise and less likely to hallucinate

@@ -39,9 +39,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED fires every time you switch browser tabs — Supabase silently
+      // refreshes the access token in the background. The user hasn't changed at all,
+      // so we skip the full reload to avoid unnecessary re-renders across the whole app.
+      if (event === 'TOKEN_REFRESHED') return;
+
       (async () => {
-        setLoading(true);
+        // Do NOT set loading:true here. The loading flag is only for the very first
+        // auth check when the app starts. Subsequent sign-in/sign-out events should
+        // update state quietly without making every page flash a skeleton.
         try {
           if (session?.user) {
             setSupabaseUser(session.user);
@@ -54,8 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('AuthStateChange handler failed:', err);
           setSupabaseUser(null);
           setUser(null);
-        } finally {
-          setLoading(false);
         }
       })();
     });
