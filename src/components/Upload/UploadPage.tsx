@@ -194,11 +194,31 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     const rawText = JSON.stringify(result, null, 2);
     const autoTags = detectTags(rawText, visibleColumns);
 
+    // ── Confidence calculation ─────────────────────────────────────────────
+    // We compute this from the data itself — no extra API call needed.
+    //
+    // fillScore: what percentage of cells in the final table actually have a
+    // non-empty value. A fully-filled table = 100, half-empty = 50, etc.
+    //
+    // warningPenalty: each validation warning the AI flagged costs 8 points,
+    // since a warning means at least one row has a suspicious value.
+    //
+    // The result is clamped between 30 (something was extracted) and 98
+    // (nothing is ever truly perfect).
+    const totalCells = visibleRows.length * visibleColumns.length;
+    const filledCells = visibleRows.reduce((count, row) => {
+      return count + visibleColumns.filter((col) => row[col]?.trim() !== '').length;
+    }, 0);
+    const fillScore = totalCells > 0 ? (filledCells / totalCells) * 100 : 50;
+    const warningCount = Array.isArray(validation.warnings) ? validation.warnings.length : 0;
+    const warningPenalty = warningCount * 8;
+    const confidence = Math.round(Math.min(98, Math.max(30, fillScore - warningPenalty)));
+
     return {
       tableData: visibleRows,
       columnNames: visibleColumns,
       autoTags,
-      confidence: 90,
+      confidence,
       rawText,
       datasetType: classification.datasetType ?? 'general',
       languageName,
