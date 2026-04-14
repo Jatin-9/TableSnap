@@ -251,152 +251,145 @@ function buildEmailHtml(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Use service role client so we can read any user's data (bypasses RLS)
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const today = new Date();
+  const isMonday = today.getDay() === 1;
+
+  // Fetch all enabled email reminders
+  const { data: reminders, error: reminderErr } = await supabase
+    .from("reminders")
+    .select("user_id, frequency")
+    .eq("enabled", true)
+    .eq("delivery_method", "email");
+
+  if (reminderErr) {
+    console.error("reminders fetch error:", reminderErr.message);
+    return new Response(JSON.stringify({ error: reminderErr.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  console.log(`Found ${reminders?.length ?? 0} active reminders`);
+
+  if (!reminders || reminders.length === 0) {
+    return new Response(JSON.stringify({ message: "No active reminders" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Filter: daily every day, weekly only on Mondays
+  const toNotify = reminders.filter(
+    (r) => r.frequency === "daily" || (r.frequency === "weekly" && isMonday),
+  );
+
+  const results = [];
+
+  for (const reminder of toNotify) {
+    // Get the user's email address from the public users table
+    const { data: userData, error: userErr } = await supabase
+      .from("users")
+      .select("email")
+      .eq("id", reminder.user_id)
+      .single();
+
+    if (userErr || !userData?.email) {
+      console.log(`Skipping ${reminder.user_id}: no email (${userErr?.message})`);
+      results.push({ userId: reminder.user_id, status: "skipped", reason: "no email" });
+      continue;
+    }
+
+    // Fetch ALL snapshots for this user — prefer language tables but fall back
+    // to everything so we don't silently skip users whose tables predate the
+    // dataset_type column (those rows have NULL there).
+    const { data: allSnaps, error: snapsErr } = await supabase
+      .from("table_snapshots")
+      .select("table_data, column_names, title, language_name, dataset_type")
+      .eq("user_id", reminder.user_id);
+
+    if (snapsErr) {
+      console.error(`snapshots fetch error for ${reminder.user_id}:`, snapsErr.message);
+      results.push({ userId: reminder.user_id, status: "error", reason: snapsErr.message });
+      continue;
+    }
+
+    console.log(`User ${reminder.user_id}: ${allSnaps?.length ?? 0} total snapshots`);
+
+    // Use language tables if any exist; otherwise fall back to all tables
+    const languageSnaps = (allSnaps ?? []).filter(
+      (s) => s.dataset_type === "language" || s.language_name,
+    );
+    const snapshots = languageSnaps.length > 0 ? languageSnaps : (allSnaps ?? []);
+
+    console.log(`Using ${snapshots.length} snapshots (${languageSnaps.length} language)`);
+
+    if (snapshots.length === 0) {
+      results.push({ userId: reminder.user_id, status: "skipped", reason: "no tables" });
+      continue;
+    }
+
+    // Flatten every row from every table into one pool and pick 5
+    const allWords: WordEntry[] = snapshots.flatMap((snap) =>
+      (snap.table_data as Record<string, string>[]).map((row) => ({
+        row,
+        columns: snap.column_names as string[],
+        tableTitle: (snap.title as string | null) || (snap.column_names as string[]).join(" / "),
+        languageName: (snap.language_name as string | null) ?? "",
+      }))
+    );
+
+    if (allWords.length === 0) {
+      results.push({ userId: reminder.user_id, status: "skipped", reason: "tables are empty" });
+      continue;
+    }
+
+    const picked = pickRandom(allWords, Math.min(5, allWords.length));
+    const html = buildEmailHtml(picked, reminder.frequency);
+
+    const resendRes = await fetch("https://api.resend.com/emails", {
+      method: "POST",
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, content-type",
+        Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        from: "TableSnap <onboarding@resend.dev>",
+        // RESEND_TEST_TO overrides the recipient — use this when your Resend
+        // account email differs from your Supabase account email. Without a
+        // verified domain, Resend only allows sending to the account's own email.
+        to: [Deno.env.get("RESEND_TEST_TO") ?? userData.email],
+        subject: `📚 Your ${reminder.frequency} vocab words — ${today.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+        html,
+      }),
     });
-  }
 
-  // This function runs server-side only — it's protected by requiring the
-  // Supabase service role key in the Authorization header.
-  // The cron job sends this key automatically.
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
-
-  const isAuthorized =
-    authHeader === `Bearer ${serviceKey}` ||
-    (cronSecret && authHeader === `Bearer ${cronSecret}`);
-
-  if (!isAuthorized) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  try {
-    // Use service role client so we can read any user's data (bypasses RLS)
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    const today = new Date();
-    // Weekly reminders only go out on Mondays (0=Sun, 1=Mon)
-    const isMonday = today.getDay() === 1;
-
-    // Fetch all enabled email reminders
-    const { data: reminders, error: reminderErr } = await supabase
-      .from("reminders")
-      .select("user_id, frequency")
-      .eq("enabled", true)
-      .eq("delivery_method", "email");
-
-    if (reminderErr) throw reminderErr;
-    if (!reminders || reminders.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No active reminders found" }),
-        { headers: { "Content-Type": "application/json" } },
-      );
+    const resendBody = await resendRes.text();
+    if (!resendRes.ok) {
+      console.error(`Resend error for ${userData.email}:`, resendBody);
+      results.push({ userId: reminder.user_id, status: "failed", to: userData.email, resendError: resendBody });
+    } else {
+      console.log(`Email sent to ${userData.email}`);
+      results.push({ userId: reminder.user_id, status: "sent", to: userData.email });
     }
-
-    // Filter: daily = send every day, weekly = send only on Mondays
-    const toNotify = reminders.filter(
-      (r) => r.frequency === "daily" || (r.frequency === "weekly" && isMonday),
-    );
-
-    const results = [];
-
-    for (const reminder of toNotify) {
-      try {
-        // Get the user's email address
-        const { data: userData } = await supabase
-          .from("users")
-          .select("email")
-          .eq("id", reminder.user_id)
-          .single();
-
-        if (!userData?.email) {
-          results.push({ userId: reminder.user_id, status: "skipped", reason: "no email" });
-          continue;
-        }
-
-        // Get all language table snapshots for this user.
-        // We filter by dataset_type = 'language' so we never pick from
-        // expense, inventory, or other general tables.
-        const { data: snapshots } = await supabase
-          .from("table_snapshots")
-          .select("table_data, column_names, title, language_name, dataset_type")
-          .eq("user_id", reminder.user_id)
-          .eq("dataset_type", "language");
-
-        if (!snapshots || snapshots.length === 0) {
-          results.push({ userId: reminder.user_id, status: "skipped", reason: "no language tables" });
-          continue;
-        }
-
-        // Flatten every row from every language table into one big pool
-        const allWords: WordEntry[] = snapshots.flatMap((snap) =>
-          (snap.table_data as Record<string, string>[]).map((row) => ({
-            row,
-            columns: snap.column_names as string[],
-            tableTitle: (snap.title as string | null) || (snap.column_names as string[]).join(" / "),
-            languageName: (snap.language_name as string | null) ?? "",
-          }))
-        );
-
-        if (allWords.length === 0) {
-          results.push({ userId: reminder.user_id, status: "skipped", reason: "tables are empty" });
-          continue;
-        }
-
-        // Pick up to 5 random words from the whole pool
-        const picked = pickRandom(allWords, Math.min(5, allWords.length));
-
-        // Build and send the email
-        const html = buildEmailHtml(picked, reminder.frequency);
-
-        const resendRes = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            // Replace with your verified domain once you set one up in Resend.
-            // Until then, Resend's onboarding address works for testing.
-            from: "TableSnap <onboarding@resend.dev>",
-            to: [userData.email],
-            subject: `📚 Your ${reminder.frequency} vocab words — ${today.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
-            html,
-          }),
-        });
-
-        if (!resendRes.ok) {
-          const errText = await resendRes.text();
-          results.push({ userId: reminder.user_id, status: "failed", error: errText });
-        } else {
-          results.push({ userId: reminder.user_id, status: "sent", to: userData.email });
-        }
-      } catch (err) {
-        results.push({ userId: reminder.user_id, status: "error", error: String(err) });
-      }
-    }
-
-    return new Response(
-      JSON.stringify({ processed: results.length, results }),
-      { headers: { "Content-Type": "application/json" } },
-    );
-  } catch (error) {
-    console.error("send-vocab-email error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Failed" }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
   }
+
+  return new Response(
+    JSON.stringify({ processed: results.length, results }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 });

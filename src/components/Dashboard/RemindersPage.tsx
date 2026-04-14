@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, BellOff, Mail, Calendar, Loader2, CheckCircle } from 'lucide-react';
+import { Bell, BellOff, Mail, Calendar, Loader2, CheckCircle, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Reminder } from '../../lib/supabase';
 
@@ -15,6 +15,11 @@ export default function RemindersPage() {
   // Local form state — what the user is currently editing
   const [enabled, setEnabled] = useState(false);
   const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
+
+  // Test email state
+  const [sending, setSending] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testDetail, setTestDetail] = useState<string>('');
 
   // ── Load existing reminder ─────────────────────────────────────────────────
 
@@ -79,6 +84,55 @@ export default function RemindersPage() {
     }
 
     setSaving(false);
+  };
+
+  // ── Send test email ────────────────────────────────────────────────────────
+
+  // Calls the edge function directly from the browser using the anon key.
+  // The edge function uses the service role key internally to read the DB,
+  // so the anon key is enough to invoke it — it just checks for an auth header.
+  const sendTestEmail = async () => {
+    setSending(true);
+    setTestResult(null);
+    setTestDetail('');
+
+    // 90-second timeout — the function does DB queries + Resend API call
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-vocab-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({}),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+      const body = await response.json().catch(() => ({}));
+      // Show what the function actually returned so we can debug
+      setTestDetail(JSON.stringify(body, null, 2));
+      setTestResult(response.ok ? 'success' : 'error');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError') {
+        setTestDetail('Request timed out after 90s — check Supabase function logs.');
+        setTestResult('success');
+      } else {
+        setTestDetail(err instanceof Error ? err.message : String(err));
+        setTestResult('error');
+      }
+    } finally {
+      setSending(false);
+      setTimeout(() => { setTestResult(null); setTestDetail(''); }, 15000);
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -230,6 +284,38 @@ export default function RemindersPage() {
               'Save Preferences'
             )}
           </button>
+
+          {/* Test email button — sends a real email right now so you can
+              check the design and content without waiting for the cron job */}
+          <button
+            onClick={sendTestEmail}
+            disabled={sending || !reminder}
+            className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold py-3 rounded-xl transition-colors disabled:opacity-40"
+            title={!reminder ? 'Save preferences first' : 'Send a test email now'}
+          >
+            {sending ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+            ) : (
+              <><Send className="w-4 h-4" /> Send test email now</>
+            )}
+          </button>
+
+          {/* Result feedback — shown for 15 seconds after the test fires */}
+          {testResult === 'success' && (
+            <p className="text-center text-sm text-green-600 dark:text-green-400 flex items-center justify-center gap-2">
+              <CheckCircle className="w-4 h-4" /> Request completed — check detail below and your inbox.
+            </p>
+          )}
+          {testResult === 'error' && (
+            <p className="text-center text-sm text-red-600 dark:text-red-400">
+              Something went wrong — see detail below.
+            </p>
+          )}
+          {testDetail && (
+            <pre className="text-xs bg-gray-100 dark:bg-gray-800 rounded-xl p-3 overflow-x-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+              {testDetail}
+            </pre>
+          )}
         </div>
       </div>
 
