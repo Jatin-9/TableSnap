@@ -1,22 +1,45 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
 
+// Splits `text` around every occurrence of `query` and wraps each match in a
+// yellow highlight span. Returns an array of plain strings and <mark> elements
+// which React renders correctly inside any JSX expression.
+// The regex escaping handles special characters like . + * so they're treated
+// as literals rather than regex operators.
+function highlight(text: string, query: string) {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} className="bg-yellow-200 text-yellow-900 dark:bg-yellow-500/40 dark:text-yellow-200 rounded px-0.5 not-italic">{part}</mark>
+      : part
+  );
+}
+
 export default function TablesPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const searchQuery = (searchParams.get('q') ?? '').toLowerCase().trim();
+
   const [snapshots, setSnapshots] = useState<TableSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState('All');
 
-  // Derived directly from snapshots + selectedFilter — no useState or useEffect needed.
-  // React re-computes this on every render, so it's always in sync without any extra
-  // state update cycle. Storing it in useState would cause an extra render every time
-  // snapshots changed (setState in effect → render → effect → setState → render).
-  const filteredSnapshots = selectedFilter === 'All'
-    ? snapshots
-    : snapshots.filter((s) => s.auto_tags.includes(selectedFilter));
+  // Apply tag filter first, then search query on top.
+  // Search matches against the table title and its auto-tags.
+  const filteredSnapshots = snapshots
+    .filter((s) => selectedFilter === 'All' || s.auto_tags.includes(selectedFilter))
+    .filter((s) => {
+      if (!searchQuery) return true;
+      const title = (s.title ?? s.column_names.join(' ')).toLowerCase();
+      const tags = s.auto_tags.join(' ').toLowerCase();
+      return title.includes(searchQuery) || tags.includes(searchQuery);
+    });
 
   // ── View modal state ──────────────────────────────────────────────────────
   // When non-null, shows the full table preview modal for that snapshot
@@ -273,7 +296,11 @@ export default function TablesPage() {
         </div>
       ) : filteredSnapshots.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center dark:bg-gray-900">
-          <p className="text-gray-500">No tables found. Upload your first table image!</p>
+          <p className="text-gray-500">
+            {searchQuery
+              ? `No tables match "${searchQuery}"`
+              : 'No tables found. Upload your first table image!'}
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -292,7 +319,7 @@ export default function TablesPage() {
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       {/* Display either the custom title or the column names as fallback */}
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {getDisplayTitle(snapshot)}
+                        {highlight(getDisplayTitle(snapshot), searchQuery)}
                       </h3>
 
                       {user?.preferences?.showConfidence !== false && (
@@ -371,9 +398,9 @@ export default function TablesPage() {
                     {snapshot.auto_tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium"
+                        className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium dark:bg-blue-900/30 dark:text-blue-300"
                       >
-                        {tag}
+                        {highlight(tag, searchQuery)}
                       </span>
                     ))}
                   </div>

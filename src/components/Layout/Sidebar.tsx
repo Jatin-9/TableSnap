@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Table2,
   BarChart3,
@@ -22,9 +22,13 @@ import { supabase } from '../../lib/supabase';
 export default function Sidebar() {
   const { user, signOut, isSuperAdmin } = useAuth();
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Keep the input in sync with the URL param so it reflects the current search
+  // (e.g. if the user navigates back to /dashboard with a query already in the URL)
+  const searchQuery = searchParams.get('q') ?? '';
   const [savingTheme, setSavingTheme] = useState(false);
 
   useEffect(() => {
@@ -130,7 +134,13 @@ export default function Sidebar() {
             type="text"
             placeholder="Search tables..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const q = e.target.value;
+              // Navigate to the tables page with the query as a URL param.
+              // This lets TablesPage read ?q= and filter — and also means
+              // the search works from any page in the sidebar.
+              navigate(q ? `/dashboard?q=${encodeURIComponent(q)}` : '/dashboard');
+            }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-400"
           />
         </div>
