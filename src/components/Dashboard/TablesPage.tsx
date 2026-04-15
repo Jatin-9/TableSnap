@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
-import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X } from 'lucide-react';
+import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X, Plus, Layers, CheckSquare, Square } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
 
 // Splits `text` around every occurrence of `query` and wraps each match in a
@@ -53,6 +53,14 @@ export default function TablesPage() {
   const [editColumns, setEditColumns] = useState<string[]>([]);
   const [editRows, setEditRows] = useState<Record<string, string>[]>([]);
   const [editSaving, setEditSaving] = useState(false);
+
+  // ── Merge state ───────────────────────────────────────────────────────────
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeTitle, setMergeTitle] = useState('');
+  const [deleteAfterMerge, setDeleteAfterMerge] = useState(true);
+  const [mergeSaving, setMergeSaving] = useState(false);
 
   const filters = [
     'All', 'Languages', 'Expenses', 'Inventory',
@@ -206,6 +214,18 @@ export default function TablesPage() {
     );
   };
 
+  // ── Add / delete rows ─────────────────────────────────────────────────────
+
+  const addRow = () => {
+    // Build an empty row with every current column as a key
+    const emptyRow = Object.fromEntries(editColumns.map((col) => [col, '']));
+    setEditRows((prev) => [...prev, emptyRow]);
+  };
+
+  const deleteRow = (rowIdx: number) => {
+    setEditRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  };
+
   // ── Save edits ────────────────────────────────────────────────────────────
 
   const saveEdits = async () => {
@@ -239,6 +259,111 @@ export default function TablesPage() {
     setEditSaving(false);
   };
 
+  // ── Merge helpers ─────────────────────────────────────────────────────────
+
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => !prev);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Computes what the merged table would look like so the modal can show a preview
+  const getMergePreview = () => {
+    const selected = snapshots.filter((s) => selectedIds.has(s.id));
+    if (selected.length < 2) return null;
+
+    // Start with the first table's column order as the base.
+    // Then add any columns from other tables that aren't already in the base.
+    // This preserves the natural column order and handles tables with extra columns.
+    const baseCols = selected[0].column_names;
+    const extraCols = selected
+      .slice(1)
+      .flatMap((t) => t.column_names)
+      .filter((col) => !baseCols.includes(col));
+    const mergedColumns = [...baseCols, ...extraCols];
+
+    const totalRows = selected.reduce((sum, t) => sum + t.row_count, 0);
+
+    // Tell the user if columns don't match so they know some cells will be empty
+    const columnsMatch = selected.every(
+      (t) =>
+        t.column_names.length === baseCols.length &&
+        t.column_names.every((c, i) => c === baseCols[i])
+    );
+
+    return { mergedColumns, totalRows, columnsMatch, selected };
+  };
+
+  const mergeTables = async () => {
+    const preview = getMergePreview();
+    if (!preview || !user) return;
+    setMergeSaving(true);
+
+    const { mergedColumns, selected } = preview;
+
+    // Stack all rows from all selected tables.
+    // For a row that's missing a column (from a different table), fill with ''.
+    const mergedRows = selected.flatMap((t) =>
+      t.table_data.map((row) => {
+        const merged: Record<string, string> = {};
+        mergedColumns.forEach((col) => { merged[col] = row[col] ?? ''; });
+        return merged;
+      })
+    );
+
+    const allTags = [...new Set(selected.flatMap((t) => t.auto_tags))];
+    const first = selected[0];
+    const avgConfidence = Math.round(
+      selected.reduce((sum, t) => sum + (t.ocr_confidence ?? 0), 0) / selected.length
+    );
+
+    const { error: insertErr } = await supabase
+      .from('table_snapshots')
+      .insert({
+        user_id: user.id,
+        title: mergeTitle.trim() || null,
+        column_names: mergedColumns,
+        table_data: mergedRows,
+        row_count: mergedRows.length,
+        column_count: mergedColumns.length,
+        auto_tags: allTags,
+        dataset_type: first.dataset_type ?? null,
+        language_name: first.language_name ?? null,
+        language_code: first.language_code ?? null,
+        ocr_confidence: avgConfidence,
+      });
+
+    if (insertErr) {
+      console.error('Merge insert error:', insertErr);
+      alert('Failed to merge. Please try again.');
+      setMergeSaving(false);
+      return;
+    }
+
+    // Delete the originals if the user asked for it
+    if (deleteAfterMerge) {
+      await supabase
+        .from('table_snapshots')
+        .delete()
+        .in('id', [...selectedIds]);
+    }
+
+    await fetchSnapshots();
+    setShowMergeModal(false);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setMergeTitle('');
+    setMergeSaving(false);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -247,14 +372,39 @@ export default function TablesPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">My Tables</h1>
-          <p className="text-gray-600 dark:text-blue-500">All your extracted tables in one place</p>
+          <p className="text-gray-600 dark:text-blue-500">
+            {selectMode
+              ? `${selectedIds.size} table${selectedIds.size !== 1 ? 's' : ''} selected`
+              : 'All your extracted tables in one place'}
+          </p>
         </div>
-        <button
-          onClick={() => window.dispatchEvent(new Event('open-upload-modal'))}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + Upload Table
-        </button>
+        <div className="flex items-center gap-2">
+          {selectMode ? (
+            <button
+              onClick={toggleSelectMode}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Cancel
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={toggleSelectMode}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                title="Select tables to merge"
+              >
+                <Layers className="w-4 h-4" />
+                Merge
+              </button>
+              <button
+                onClick={() => window.dispatchEvent(new Event('open-upload-modal'))}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                + Upload Table
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Tag filter bar */}
@@ -309,12 +459,30 @@ export default function TablesPage() {
             const hasAddedColumns = Array.isArray(snapshot.added_columns) && snapshot.added_columns.length > 0;
             const warningCount = Array.isArray(snapshot.validation_warnings) ? snapshot.validation_warnings.length : 0;
 
+            const isSelected = selectedIds.has(snapshot.id);
+
             return (
               <div
                 key={snapshot.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow dark:bg-gray-900"
+                onClick={selectMode ? () => toggleSelect(snapshot.id) : undefined}
+                className={`bg-white rounded-xl shadow-sm border p-6 transition-all dark:bg-gray-900 ${
+                  selectMode
+                    ? 'cursor-pointer ' + (isSelected
+                        ? 'border-blue-500 ring-2 ring-blue-500/30 dark:border-blue-400'
+                        : 'border-gray-200 hover:border-blue-300 dark:border-gray-700')
+                    : 'border-gray-200 hover:shadow-md dark:border-gray-700'
+                }`}
               >
                 <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-3 flex-1">
+                    {/* Checkbox — only visible in select mode */}
+                    {selectMode && (
+                      <div className="mt-0.5 flex-shrink-0 text-blue-600">
+                        {isSelected
+                          ? <CheckSquare className="w-5 h-5" />
+                          : <Square className="w-5 h-5 text-gray-400" />}
+                      </div>
+                    )}
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       {/* Display either the custom title or the column names as fallback */}
@@ -355,41 +523,44 @@ export default function TablesPage() {
                       <div>{snapshot.row_count} rows × {snapshot.column_count} cols</div>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedSnapshot(snapshot)}
-                      className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
-                      title="View table"
-                    >
-                      <Eye className="w-5 h-5" />
-                    </button>
-
-                    {/* New edit button — opens the edit modal */}
-                    <button
-                      onClick={() => openEditModal(snapshot)}
-                      className="p-2 hover:bg-amber-50 rounded-lg text-amber-600"
-                      title="Edit table"
-                    >
-                      <Pencil className="w-5 h-5" />
-                    </button>
-
-                    <button
-                      onClick={() => exportToCSV(snapshot)}
-                      className="p-2 hover:bg-green-50 rounded-lg text-green-600"
-                      title="Export CSV"
-                    >
-                      <Download className="w-5 h-5" />
-                    </button>
-
-                    <button
-                      onClick={() => deleteSnapshot(snapshot.id)}
-                      className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
                   </div>
+
+                  {/* Action buttons — hidden in select mode so clicking the card toggles selection */}
+                  {!selectMode && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedSnapshot(snapshot)}
+                        className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
+                        title="View table"
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={() => openEditModal(snapshot)}
+                        className="p-2 hover:bg-amber-50 rounded-lg text-amber-600"
+                        title="Edit table"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={() => exportToCSV(snapshot)}
+                        className="p-2 hover:bg-green-50 rounded-lg text-green-600"
+                        title="Export CSV"
+                      >
+                        <Download className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={() => deleteSnapshot(snapshot.id)}
+                        className="p-2 hover:bg-red-50 rounded-lg text-red-600"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -410,6 +581,113 @@ export default function TablesPage() {
           })}
         </div>
       )}
+
+      {/* ── Sticky merge action bar — appears when 2+ tables are selected ─── */}
+      {selectMode && selectedIds.size >= 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl dark:bg-white dark:text-gray-900">
+          <span className="text-sm font-medium">
+            {selectedIds.size} tables selected
+          </span>
+          <button
+            onClick={() => { setMergeTitle(''); setShowMergeModal(true); }}
+            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded-xl transition-colors text-sm dark:bg-blue-600 dark:hover:bg-blue-700"
+          >
+            <Layers className="w-4 h-4" />
+            Merge {selectedIds.size} Tables
+          </button>
+        </div>
+      )}
+
+      {/* ── Merge confirmation modal ────────────────────────────────────────── */}
+      {showMergeModal && (() => {
+        const preview = getMergePreview();
+        if (!preview) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+            onClick={() => setShowMergeModal(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl bg-white p-8 dark:bg-zinc-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-blue-500" />
+                  Merge Tables
+                </h2>
+                <button onClick={() => setShowMergeModal(false)} className="p-2 hover:bg-gray-100 rounded-lg dark:hover:bg-gray-800">
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Preview summary */}
+              <div className="mb-5 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-sm space-y-2">
+                <p className="text-blue-800 dark:text-blue-300">
+                  <span className="font-semibold">{preview.selected.length} tables</span> → <span className="font-semibold">{preview.totalRows} total rows</span>
+                </p>
+                <p className="text-blue-700 dark:text-blue-400">
+                  Columns: {preview.mergedColumns.join(' · ')}
+                </p>
+                {!preview.columnsMatch && (
+                  <p className="text-amber-700 dark:text-amber-400 font-medium">
+                    ⚠ Some tables have different columns — missing cells will be left blank.
+                  </p>
+                )}
+              </div>
+
+              {/* Title input */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Name the merged table
+                </label>
+                <input
+                  type="text"
+                  value={mergeTitle}
+                  onChange={(e) => setMergeTitle(e.target.value)}
+                  placeholder="e.g. Japanese Vocab — All Chapters"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400"
+                />
+              </div>
+
+              {/* Delete originals toggle */}
+              <label className="flex items-center gap-3 mb-6 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteAfterMerge}
+                  onChange={(e) => setDeleteAfterMerge(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Delete original tables after merging
+                </span>
+              </label>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={mergeTables}
+                  disabled={mergeSaving}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {mergeSaving ? (
+                    'Merging...'
+                  ) : (
+                    <><Layers className="w-4 h-4" /> Merge Tables</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowMergeModal(false)}
+                  disabled={mergeSaving}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-gray-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── View-only preview modal ─────────────────────────────────────────── */}
       {selectedSnapshot && (
@@ -542,8 +820,6 @@ export default function TablesPage() {
                     <tr>
                       {editColumns.map((col, colIdx) => (
                         <th key={colIdx} className="p-2 text-left">
-                          {/* Column name is an editable input */}
-                          {/* onBlur fires when the user clicks away, which is when we apply the rename */}
                           <input
                             type="text"
                             defaultValue={col}
@@ -552,14 +828,15 @@ export default function TablesPage() {
                           />
                         </th>
                       ))}
+                      {/* Empty header to align with the delete buttons column */}
+                      <th className="w-8" />
                     </tr>
                   </thead>
                   <tbody>
                     {editRows.map((row, rowIdx) => (
-                      <tr key={rowIdx} className="border-t border-gray-100 dark:border-gray-800">
+                      <tr key={rowIdx} className="border-t border-gray-100 dark:border-gray-800 group">
                         {editColumns.map((col, colIdx) => (
                           <td key={colIdx} className="p-2">
-                            {/* Each cell is an editable input — onChange updates immediately */}
                             <input
                               type="text"
                               value={row[col] ?? ''}
@@ -568,11 +845,30 @@ export default function TablesPage() {
                             />
                           </td>
                         ))}
+                        {/* Delete row button — visible on row hover */}
+                        <td className="p-2 w-8">
+                          <button
+                            onClick={() => deleteRow(rowIdx)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all dark:hover:bg-red-900/20"
+                            title="Delete this row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {/* Add Row button — sits just below the table */}
+              <button
+                onClick={addRow}
+                className="mt-3 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:bg-blue-900/20"
+              >
+                <Plus className="w-4 h-4" />
+                Add Row
+              </button>
             </div>
 
             {/* Save / Cancel buttons */}
