@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
-import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X, Plus, Layers, CheckSquare, Square } from 'lucide-react';
+import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X, Plus, Layers, CheckSquare, Square, Clipboard, BookOpen } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
 
 // Splits `text` around every occurrence of `query` and wraps each match in a
@@ -113,23 +113,143 @@ export default function TablesPage() {
     if (!error) fetchSnapshots();
   };
 
-  // ── CSV export ────────────────────────────────────────────────────────────
+  // ── Export helpers ────────────────────────────────────────────────────────
+
+  // Wraps a cell value in quotes and escapes any quote characters inside it.
+  // e.g.  She said "hi"  →  "She said ""hi"""
+  // This is the standard CSV escaping rule so Excel/Sheets parse it correctly.
+  const csvCell = (value: string) => `"${(value ?? '').replace(/"/g, '""')}"`;
 
   const exportToCSV = (snapshot: TableSnapshot) => {
-    const headers = snapshot.column_names.join(',');
+    // Header row — column names are also quoted so names with commas don't break
+    const header = snapshot.column_names.map(csvCell).join(',');
     const rows = snapshot.table_data
-      .map((row) => snapshot.column_names.map((col) => `"${row[col] || ''}"`).join(','))
+      .map((row) => snapshot.column_names.map((col) => csvCell(row[col] ?? '')).join(','))
       .join('\n');
 
-    const csv = `${headers}\n${rows}`;
+    const csv = `${header}\n${rows}`;
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    // Use the table title in the filename if available, otherwise fall back to the ID
     a.download = `${snapshot.title || 'table'}-${snapshot.id.slice(0, 6)}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  // Copies the table as tab-separated text so you can paste directly into
+  // Google Sheets, Excel, or Notion. Each row is a line; cells are separated
+  // by tabs. Tabs inside cell values are replaced with a space to avoid
+  // breaking the column alignment.
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async (snapshot: TableSnapshot) => {
+    const header = snapshot.column_names.join('\t');
+    const rows = snapshot.table_data
+      .map((row) =>
+        snapshot.column_names
+          .map((col) => (row[col] ?? '').replace(/\t/g, ' '))
+          .join('\t'),
+      )
+      .join('\n');
+
+    await navigator.clipboard.writeText(`${header}\n${rows}`);
+    // Show a brief "Copied!" confirmation then reset back to normal label
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Anki import format: one flashcard per line, front TAB back.
+  // Only makes sense for 2-column tables (e.g. Japanese word | English meaning).
+  // Anki reads this .txt file when you go File → Import inside the app.
+  const exportToAnki = (snapshot: TableSnapshot) => {
+    const [col1, col2] = snapshot.column_names;
+    const lines = snapshot.table_data
+      .map((row) => `${row[col1] ?? ''}\t${row[col2] ?? ''}`)
+      .join('\n');
+
+    const blob = new Blob([lines], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${snapshot.title || 'anki'}-${snapshot.id.slice(0, 6)}.txt`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // ── AnkiConnect ───────────────────────────────────────────────────────────
+  // AnkiConnect is a free Anki plugin that runs a local server on port 8765.
+  // We send cards directly to it so the user never has to touch a file.
+  // Anki must be open on the desktop with the plugin installed for this to work.
+
+  // 'idle' | 'sending' | 'success' | 'error'
+  const [ankiStatus, setAnkiStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [ankiError, setAnkiError] = useState('');
+
+  const sendToAnki = async (snapshot: TableSnapshot) => {
+    const [col1, col2] = snapshot.column_names;
+    // The deck name defaults to the table title, or "TableSnap" if untitled.
+    // AnkiConnect creates the deck automatically if it doesn't already exist.
+    const deckName = snapshot.title || 'TableSnap';
+
+    // Build one note object per row in the format AnkiConnect expects.
+    // "Basic" is Anki's default card type — front and back.
+    const notes = snapshot.table_data.map((row) => ({
+      deckName,
+      modelName: 'Basic',
+      fields: {
+        Front: row[col1] ?? '',
+        Back: row[col2] ?? '',
+      },
+      options: {
+        // If this exact front already exists in Anki, skip it instead of
+        // creating a duplicate card.
+        allowDuplicate: false,
+      },
+      tags: ['tablesnap'],
+    }));
+
+    setAnkiStatus('sending');
+    setAnkiError('');
+
+    // Helper that sends a single AnkiConnect action and returns the response.
+    // Every AnkiConnect call has the same shape: { action, version, params }.
+    const ankiRequest = async (action: string, params: object) => {
+      const res = await fetch('http://localhost:8765', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, version: 6, params }),
+      });
+      return res.json();
+    };
+
+    try {
+      // Step 1 — create the deck first. If it already exists Anki just ignores it.
+      // Without this step, addNotes fails with "deck was not found".
+      const deckResult = await ankiRequest('createDeck', { deck: deckName });
+      if (deckResult.error) throw new Error(deckResult.error);
+
+      // Step 2 — add the notes now that the deck definitely exists.
+      const data = await ankiRequest('addNotes', { notes });
+
+      // AnkiConnect returns an array of note IDs. null in the array means that
+      // specific card was skipped (duplicate). An error field means full failure.
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setAnkiStatus('success');
+      setTimeout(() => setAnkiStatus('idle'), 3000);
+    } catch (err: unknown) {
+      // Most common cause: Anki isn't open or the plugin isn't installed.
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setAnkiError(
+        message.includes('Failed to fetch')
+          ? 'Could not reach Anki. Make sure Anki is open and AnkiConnect plugin is installed.'
+          : message,
+      );
+      setAnkiStatus('error');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -226,6 +346,19 @@ export default function TablesPage() {
 
   const deleteRow = (rowIdx: number) => {
     setEditRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  };
+
+  // Removes the column from the header list and strips that key from every row.
+  // `map` on rows creates a new object for each row without the deleted column.
+  const deleteColumn = (colName: string) => {
+    setEditColumns((prev) => prev.filter((c) => c !== colName));
+    setEditRows((prev) =>
+      prev.map((row) => {
+        const updated = { ...row };
+        delete updated[colName];
+        return updated;
+      }),
+    );
   };
 
   const addColumn = () => {
@@ -766,16 +899,75 @@ export default function TablesPage() {
               </table>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-wrap gap-3">
+              {/* CSV download — works for any table size */}
               <button
                 onClick={() => exportToCSV(selectedSnapshot)}
-                className="flex-1 bg-blue-600 text-white py-3 rounded-lg"
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
               >
+                <Download className="w-4 h-4" />
                 Export CSV
               </button>
+
+              {/* Copy to clipboard — tab-separated so paste works in Sheets / Notion */}
               <button
-                onClick={() => setSelectedSnapshot(null)}
-                className="flex-1 bg-gray-200 py-3 rounded-lg dark:bg-gray-200 dark:text-gray-900"
+                onClick={() => copyToClipboard(selectedSnapshot)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-700 hover:bg-gray-800 text-white font-semibold rounded-lg transition-colors dark:bg-gray-600 dark:hover:bg-gray-500"
+              >
+                <Clipboard className="w-4 h-4" />
+                {copied ? 'Copied!' : 'Copy to Clipboard'}
+              </button>
+
+              {/* Anki buttons — only shown for 2-column tables (flashcard format) */}
+              {selectedSnapshot.column_names.length === 2 && (
+                <>
+                  {/* File export — manual import via File → Import in Anki */}
+                  <button
+                    onClick={() => exportToAnki(selectedSnapshot)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Export for Anki
+                  </button>
+
+                  {/* AnkiConnect — sends cards directly to open Anki desktop app */}
+                  <button
+                    onClick={() => sendToAnki(selectedSnapshot)}
+                    disabled={ankiStatus === 'sending'}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    {ankiStatus === 'sending'
+                      ? 'Sending...'
+                      : ankiStatus === 'success'
+                      ? 'Sent to Anki!'
+                      : 'Send to Anki'}
+                  </button>
+
+                  {/* Success banner */}
+                  {ankiStatus === 'success' && (
+                    <p className="w-full px-4 py-2.5 bg-green-50 border border-green-200 text-green-700 font-medium text-sm rounded-lg dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">
+                      Cards sent to Anki successfully! Open Anki to start studying.
+                    </p>
+                  )}
+
+                  {/* Error message shown below buttons if AnkiConnect fails */}
+                  {ankiStatus === 'error' && (
+                    <p className="w-full px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 font-medium text-sm rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+                      {ankiError}
+                    </p>
+                  )}
+                </>
+              )}
+
+              <button
+                onClick={() => {
+                  setSelectedSnapshot(null);
+                  // Reset AnkiConnect status when closing the modal
+                  setAnkiStatus('idle');
+                  setAnkiError('');
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-gray-200"
               >
                 Close
               </button>
@@ -834,13 +1026,25 @@ export default function TablesPage() {
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       {editColumns.map((col, colIdx) => (
-                        <th key={colIdx} className="p-2 text-left">
-                          <input
-                            type="text"
-                            defaultValue={col}
-                            onBlur={(e) => handleColumnRename(col, e.target.value, colIdx)}
-                            className="w-full px-2 py-1 font-semibold text-gray-900 bg-blue-50 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-900/30 dark:border-blue-700 dark:text-white"
-                          />
+                        // `group` on the <th> lets the delete button inside use
+                        // `group-hover:opacity-100` — same trick used on rows
+                        <th key={colIdx} className="p-2 text-left group">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              defaultValue={col}
+                              onBlur={(e) => handleColumnRename(col, e.target.value, colIdx)}
+                              className="w-full px-2 py-1 font-semibold text-gray-900 bg-blue-50 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-900/30 dark:border-blue-700 dark:text-white"
+                            />
+                            {/* Delete column button — appears on header hover */}
+                            <button
+                              onClick={() => deleteColumn(col)}
+                              className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all dark:hover:bg-red-900/20"
+                              title="Delete this column"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </th>
                       ))}
                       {/* Empty header to align with the delete buttons column */}
