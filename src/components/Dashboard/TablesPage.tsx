@@ -53,6 +53,7 @@ export default function TablesPage() {
   const [editColumns, setEditColumns] = useState<string[]>([]);
   const [editRows, setEditRows] = useState<Record<string, string>[]>([]);
   const [editSaving, setEditSaving] = useState(false);
+  const [newColName, setNewColName] = useState('');
 
   // ── Merge state ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false);
@@ -178,6 +179,7 @@ export default function TablesPage() {
     setEditTitle('');
     setEditColumns([]);
     setEditRows([]);
+    setNewColName('');
   };
 
   // ── Column rename ─────────────────────────────────────────────────────────
@@ -224,6 +226,19 @@ export default function TablesPage() {
 
   const deleteRow = (rowIdx: number) => {
     setEditRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  };
+
+  const addColumn = () => {
+    const name = newColName.trim();
+    if (!name) return;
+    // Silently ignore if a column with this name already exists
+    if (editColumns.includes(name)) return;
+
+    // Add the column name to the header list
+    setEditColumns((prev) => [...prev, name]);
+    // Add an empty value for this column in every existing row
+    setEditRows((prev) => prev.map((row) => ({ ...row, [name]: '' })));
+    setNewColName('');
   };
 
   // ── Save edits ────────────────────────────────────────────────────────────
@@ -869,6 +884,26 @@ export default function TablesPage() {
                 <Plus className="w-4 h-4" />
                 Add Row
               </button>
+
+              {/* Add Column — inline input + button */}
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="New column name..."
+                  value={newColName}
+                  onChange={(e) => setNewColName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addColumn()}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-400"
+                />
+                <button
+                  onClick={addColumn}
+                  disabled={!newColName.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed dark:text-green-400 dark:hover:bg-green-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Column
+                </button>
+              </div>
             </div>
 
             {/* Save / Cancel buttons */}
