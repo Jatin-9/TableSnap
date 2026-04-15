@@ -295,9 +295,11 @@ export default function TablesPage() {
                         {getDisplayTitle(snapshot)}
                       </h3>
 
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium dark:text-white dark:bg-blue-600">
-                        {snapshot.ocr_confidence}% confidence
-                      </span>
+                      {user?.preferences?.showConfidence !== false && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium dark:text-white dark:bg-blue-600">
+                          {snapshot.ocr_confidence}% confidence
+                        </span>
+                      )}
 
                       {snapshot.dataset_type === 'language' && snapshot.language_name && (
                         <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium dark:bg-purple-900/30 dark:text-purple-300">

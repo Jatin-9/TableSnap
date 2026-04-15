@@ -9,6 +9,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
   isSuperAdmin: boolean;
 }
 
@@ -116,6 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
+  // Merges partial updates into the in-memory user object so any component
+  // that reads from useAuth() sees the new values immediately — without
+  // needing a full page refresh or a round-trip back to the DB.
+  const updateUser = (updates: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : null));
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -128,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signIn,
     signOut,
+    updateUser,
     isSuperAdmin: user?.role === 'super_admin',
   };
 

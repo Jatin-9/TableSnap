@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Settings as SettingsIcon, User, Shield, Save } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [preferences, setPreferences] = useState(user?.preferences || {});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -17,6 +17,9 @@ export default function SettingsPage() {
       .eq('id', user!.id);
 
     if (!error) {
+      // Push the new preferences into the shared AuthContext so every
+      // component reading user.preferences (e.g. TablesPage) updates instantly.
+      updateUser({ preferences });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     }
@@ -92,43 +95,6 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
-              <div >
-                <p className="font-medium text-gray-900 dark:text-gray-300">Auto-tag Tables</p>
-                <p className="text-sm text-gray-500 dark:text-blue-500">
-                  Automatically detect and tag table content
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={preferences.autoTag !== false}
-                onChange={(e) =>
-                  setPreferences({ ...preferences, autoTag: e.target.checked })
-                }
-                className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
-              <div>
-                <p className="font-medium text-gray-900 dark:text-gray-300">Email Notifications</p>
-                <p className="text-sm text-gray-500 dark:text-blue-500">
-                  Receive updates via email
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={preferences.emailNotifications !== false}
-                onChange={(e) =>
-                  setPreferences({
-                    ...preferences,
-                    emailNotifications: e.target.checked,
-                  })
-                }
-                className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
               <div>
                 <p className="font-medium text-gray-900 dark:text-gray-300">Show Confidence Scores</p>
