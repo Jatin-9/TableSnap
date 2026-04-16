@@ -34,7 +34,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 max-w-4xl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
+        <div className="dashboard-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <User className="w-6 h-6 text-blue-600" />
@@ -86,7 +86,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900">
+        <div className="dashboard-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
               <SettingsIcon className="w-6 h-6 text-green-700" />

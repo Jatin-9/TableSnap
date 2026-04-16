@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { Upload, Image as ImageIcon, Loader2, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Loader2, X, CheckCircle, AlertCircle, Trash2, FileText } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+// Vite resolves this to the worker file URL at build time.
+// Importing it statically as a URL string means pdfjs can load the worker
+// without any runtime bundler tricks — the PDF JS is still loaded lazily below.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 type UploadPageProps = {
   onSaved?: () => void;
@@ -84,11 +88,79 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
       reader.onerror = reject;
     });
 
+  // Converts each page of a PDF into a base64 PNG string.
+  // Returns an array of data URLs — one per page, in order.
+  // Rejects with an error message if the PDF has more than MAX_PDF_PAGES pages.
+  const MAX_PDF_PAGES = 10;
+
+  const pdfToImages = async (file: File): Promise<string[]> => {
+    // Lazy-load pdfjs so the ~2 MB bundle only downloads when a PDF is actually selected
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    if (pdf.numPages > MAX_PDF_PAGES) {
+      throw new Error(
+        `This PDF has ${pdf.numPages} pages — only PDFs with ${MAX_PDF_PAGES} or fewer pages are supported.`
+      );
+    }
+
+    const pageImages: string[] = [];
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      // Scale 2.0 gives a higher resolution render that improves OCR accuracy
+      const viewport = page.getViewport({ scale: 2.0 });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      // pdfjs-dist v5 takes `canvas` directly; `canvasContext` is deprecated
+      await page.render({ canvas, viewport }).promise;
+
+      // Export as PNG data URL — the existing OCR pipeline accepts base64 data URLs
+      pageImages.push(canvas.toDataURL('image/png'));
+    }
+
+    return pageImages;
+  };
+
   const readPreviewsAndEnqueue = async (files: File[]) => {
-    const newItems: ImageQueueItem[] = await Promise.all(
-      files.map(async (file) => {
+    const newItems: ImageQueueItem[] = [];
+
+    for (const file of files) {
+      if (file.type === 'application/pdf') {
+        // Convert each PDF page into a PNG data URL and enqueue them as separate items
+        try {
+          const pageDataUrls = await pdfToImages(file);
+          for (let i = 0; i < pageDataUrls.length; i++) {
+            const dataUrl = pageDataUrls[i];
+            // Wrap the PNG data back into a File object so the rest of the
+            // pipeline (which expects a File) works without modification
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const pageFile = new File([blob], `${file.name}-page${i + 1}.png`, { type: 'image/png' });
+            newItems.push({
+              id: `${file.name}-p${i + 1}-${Date.now()}-${Math.random()}`,
+              file: pageFile,
+              preview: dataUrl,
+              status: 'pending' as QueueStatus,
+              data: null,
+              statusMsg: `PDF page ${i + 1} of ${pageDataUrls.length} — ready to extract`,
+              errorMsg: '',
+            });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Could not read PDF';
+          alert(`Skipped "${file.name}": ${msg}`);
+        }
+      } else {
+        // Regular image — existing flow
         const preview = await fileToBase64(file);
-        return {
+        newItems.push({
           id: `${file.name}-${Date.now()}-${Math.random()}`,
           file,
           preview,
@@ -96,9 +168,10 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           data: null,
           statusMsg: 'Ready to extract',
           errorMsg: '',
-        };
-      })
-    );
+        });
+      }
+    }
+
     setImageQueue((prev) => [...prev, ...newItems]);
   };
 
@@ -456,28 +529,33 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files ?? []);
-    const imageFiles = selectedFiles.filter((f) => f.type.startsWith('image/'));
+    // Accept images and PDFs; skip anything else
+    const validFiles = selectedFiles.filter(
+      (f) => f.type.startsWith('image/') || f.type === 'application/pdf'
+    );
 
-    if (imageFiles.length < selectedFiles.length) {
-      alert('Some files were skipped — only image files are accepted.');
+    if (validFiles.length < selectedFiles.length) {
+      alert('Some files were skipped — only image files and PDFs are accepted.');
     }
 
-    // Work out how many slots are left before we hit the cap
+    // Work out how many slots are left before we hit the cap.
+    // PDFs may expand into multiple pages, but we don't know the page count yet —
+    // the cap will be enforced again inside readPreviewsAndEnqueue if needed.
     const currentCount = imageQueue.length;
     const remainingSlots = MAX_IMAGES - currentCount;
 
     if (remainingSlots <= 0) {
-      alert(`You've reached the maximum of ${MAX_IMAGES} images per session.`);
+      alert(`You've reached the maximum of ${MAX_IMAGES} items per session.`);
       e.target.value = '';
       return;
     }
 
-    // Trim the selection down to what fits
-    const filesToAdd = imageFiles.slice(0, remainingSlots);
+    // Trim to the number of files that might fit (exact enforcement happens after PDF expansion)
+    const filesToAdd = validFiles.slice(0, remainingSlots);
 
-    if (imageFiles.length > remainingSlots) {
+    if (validFiles.length > remainingSlots) {
       alert(
-        `Only ${remainingSlots} more image${remainingSlots !== 1 ? 's' : ''} can be added ` +
+        `Only ${remainingSlots} more file${remainingSlots !== 1 ? 's' : ''} can be added ` +
         `(max ${MAX_IMAGES} total). The first ${remainingSlots} were selected.`
       );
     }
@@ -552,7 +630,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer dark:border-gray-700 dark:hover:border-blue-500">
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 multiple
                 onChange={handleFileChange}
                 className="hidden"
@@ -560,14 +638,19 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                 disabled={isProcessing}
               />
               <label htmlFor="file-upload" className="cursor-pointer">
-                <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4 dark:text-gray-500" />
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <ImageIcon className="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                  <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                </div>
                 <p className="text-gray-600 mb-2 dark:text-gray-300">
-                  Click to select images{' '}
+                  Click to select images or PDFs{' '}
                   <span className="text-blue-600 font-medium dark:text-blue-400">
                     (up to {remainingSlots} more)
                   </span>
                 </p>
-                <p className="text-sm text-gray-400 dark:text-gray-500">PNG, JPG, WEBP up to 10MB each</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  PNG, JPG, WEBP up to 10MB · PDF up to 10 pages
+                </p>
               </label>
             </div>
           ) : (

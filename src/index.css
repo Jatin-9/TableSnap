@@ -10,3 +10,60 @@ body,
 body {
     margin: 0;
 }
+
+/* ── Landing page animations ─────────────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  25%       { transform: translateY(-10px) translateX(5px); }
+  50%       { transform: translateY(-5px) translateX(-5px); }
+  75%       { transform: translateY(-15px) translateX(3px); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; filter: blur(20px); }
+  50%       { opacity: 0.6; filter: blur(25px); }
+}
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.animate-float         { animation: float 6s ease-in-out infinite; }
+.animate-float-delayed { animation: float 8s ease-in-out infinite; animation-delay: -2s; }
+.animate-float-slow    { animation: float 10s ease-in-out infinite; animation-delay: -4s; }
+.animate-pulse-glow    { animation: pulse-glow 4s ease-in-out infinite; }
+.animate-gradient      { background-size: 200% 200%; animation: gradient-shift 8s ease infinite; }
+
+/* Gradient text — works in both light and dark mode */
+.gradient-text {
+  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 50%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glassmorphism surface — dark-first */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Floating language words in the hero background */
+.floating-word {
+  color: rgba(37, 99, 235, 0.4);
+  text-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+}
+
+/* Dashboard card — solid, visible in both light and dark mode */
+.dashboard-card {
+  @apply bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800;
+}

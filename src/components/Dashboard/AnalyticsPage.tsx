@@ -373,7 +373,7 @@ export default function AnalyticsPage() {
       {/* ── Top row charts ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900 dark:border-gray-800">
+        <div className="dashboard-card p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">
             Tables Created — Last 30 Days
           </h2>
@@ -387,7 +387,7 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900 dark:border-gray-800">
+        <div className="dashboard-card p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">
             Rows Added — Last 7 Days
           </h2>
@@ -406,7 +406,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Tables by Tag — kept as Pie, still useful */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900 dark:border-gray-800">
+        <div className="dashboard-card p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-white">
             Tables by Tag
           </h2>
@@ -430,7 +430,7 @@ export default function AnalyticsPage() {
         {/* Language Breakdown — replaces the old duplicate Doughnut chart.
             Shows exactly which languages the user has tables for and how many,
             which is much more informative than a second copy of the tag pie. */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 dark:bg-gray-900 dark:border-gray-800">
+        <div className="dashboard-card p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-1 dark:text-white">
             Language Breakdown
           </h2>

@@ -157,7 +157,7 @@ export default function RemindersPage() {
       </div>
 
       {/* Main settings card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+      <div className="dashboard-card overflow-hidden">
 
         {/* Card header — shows which email + the on/off toggle */}
         <div className="flex items-center gap-4 p-6 border-b border-gray-100 dark:border-gray-800">

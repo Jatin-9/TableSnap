@@ -176,7 +176,7 @@ export default function StudyPage() {
                   className={`cursor-pointer rounded-xl border-2 p-5 transition-all ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                      : 'border-gray-200 bg-white hover:border-blue-300 dark:bg-gray-900 dark:border-gray-700 dark:hover:border-blue-600'
+                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-600'
                   }`}
                 >
                   <p className="font-semibold text-gray-900 dark:text-white mb-2 truncate">

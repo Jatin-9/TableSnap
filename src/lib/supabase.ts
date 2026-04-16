@@ -39,7 +39,27 @@ export type TableSnapshot = {
   detected_languages?: string[] | null;
   added_columns?: string[] | null;
   validation_warnings?: string[] | null;
+  // Timestamp of the last edit; set automatically by a DB trigger on UPDATE.
+  // When null (e.g. rows created before this column existed) fall back to created_at.
+  updated_at?: string | null;
 };
+
+// A single message in an AI chat — either typed by the user or returned by the AI
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+// A saved chat session — stores the full conversation so users can resume it later
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  messages: ChatMessage[];
+  message_count: number;
+  last_message_at: string;
+  created_at: string;
+}
 
 export interface UserAnalytics {
   id: string;

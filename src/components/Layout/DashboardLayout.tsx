@@ -38,7 +38,7 @@ export default function DashboardLayout() {
           onClick={() => setShowUploadModal(false)}
         >
           <div
-            className="w-full max-w-6xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 shadow-2xl"
+            className="w-full max-w-6xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <UploadPage
