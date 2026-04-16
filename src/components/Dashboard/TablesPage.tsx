@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
-import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X, Plus, Layers, CheckSquare, Square, Clipboard, BookOpen } from 'lucide-react';
+import { Filter, Download, Eye, Trash2, Calendar, Tag, Pencil, Check, X, Plus, Layers, CheckSquare, Square, Clipboard, BookOpen, Share2 } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
 
 // Splits `text` around every occurrence of `query` and wraps each match in a
@@ -142,6 +142,16 @@ export default function TablesPage() {
   // by tabs. Tabs inside cell values are replaced with a space to avoid
   // breaking the column alignment.
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const copyShareLink = (snapshot: TableSnapshot) => {
+    // Build the full public URL using the current browser origin so it works
+    // on both localhost in dev and the real domain in production.
+    const url = `${window.location.origin}/share/${snapshot.id}`;
+    navigator.clipboard.writeText(url);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   const copyToClipboard = async (snapshot: TableSnapshot) => {
     const header = snapshot.column_names.join('\t');
@@ -400,6 +410,40 @@ export default function TablesPage() {
       alert('Failed to save changes. Please try again.');
     } else {
       // Refresh the list so the updated title/data appears immediately
+      await fetchSnapshots();
+      closeEditModal();
+    }
+
+    setEditSaving(false);
+  };
+
+  // Creates a brand new table with the edited data, leaving the original untouched.
+  // Think of it as "duplicate this table, then apply my edits to the copy".
+  const saveAsNewTable = async () => {
+    if (!editingSnapshot || !user) return;
+    setEditSaving(true);
+
+    // Copy everything from the original snapshot but replace the editable fields.
+    // We omit `id` and `created_at` so Supabase generates fresh ones for the new row.
+    const { error } = await supabase.from('table_snapshots').insert({
+      user_id: user.id,
+      title: editTitle.trim() ? `${editTitle.trim()} (copy)` : null,
+      column_names: editColumns,
+      table_data: editRows,
+      column_count: editColumns.length,
+      row_count: editRows.length,
+      // Carry over metadata from the original so tags, language info etc. are preserved
+      auto_tags: editingSnapshot.auto_tags,
+      ocr_confidence: editingSnapshot.ocr_confidence,
+      dataset_type: editingSnapshot.dataset_type,
+      language_code: editingSnapshot.language_code,
+      language_name: editingSnapshot.language_name,
+    });
+
+    if (error) {
+      console.error('Insert error:', error);
+      alert('Failed to create new table. Please try again.');
+    } else {
       await fetchSnapshots();
       closeEditModal();
     }
@@ -865,6 +909,15 @@ export default function TablesPage() {
                   )}
                 </div>
               </div>
+
+              {/* Share button — top right of modal header */}
+              <button
+                onClick={() => copyShareLink(selectedSnapshot)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-blue-600 hover:bg-blue-50 border border-gray-200 rounded-lg transition-colors dark:text-gray-300 dark:border-gray-700 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Share2 className="w-4 h-4" />
+                {shareCopied ? 'Link copied!' : 'Share'}
+              </button>
             </div>
 
             {Array.isArray(selectedSnapshot.validation_warnings) && selectedSnapshot.validation_warnings.length > 0 && (
@@ -1111,7 +1164,8 @@ export default function TablesPage() {
             </div>
 
             {/* Save / Cancel buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              {/* Overwrites the existing table */}
               <button
                 onClick={saveEdits}
                 disabled={editSaving}
@@ -1126,6 +1180,23 @@ export default function TablesPage() {
                   </>
                 )}
               </button>
+
+              {/* Keeps the original intact and creates a new table with the edits */}
+              <button
+                onClick={saveAsNewTable}
+                disabled={editSaving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {editSaving ? (
+                  <>Saving...</>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Save as New Table
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={closeEditModal}
                 disabled={editSaving}

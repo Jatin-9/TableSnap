@@ -13,6 +13,7 @@ import {
   Loader2,
   Plus,
   MessageSquare, // Used for the "Ask AI" nav item
+  BookOpen, // Used for the "Study" nav item
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -102,6 +103,7 @@ export default function Sidebar() {
     { to: '/dashboard/analytics', icon: BarChart3, label: 'My Analytics' },
     // "Ask AI" takes the user to the Natural Language Query chatbox
     { to: '/dashboard/query', icon: MessageSquare, label: 'Ask AI' },
+    { to: '/dashboard/study', icon: BookOpen, label: 'Study' },
     { to: '/dashboard/reminders', icon: Bell, label: 'Reminders' },
     { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
   ];
