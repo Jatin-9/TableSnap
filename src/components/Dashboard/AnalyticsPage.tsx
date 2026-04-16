@@ -273,14 +273,14 @@ export default function AnalyticsPage() {
     // The user sees stat card shapes and chart box shapes instantly —
     // no full-screen spinner, no blank white page.
     return (
-      <div className="p-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
+      <div className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen">
         {/* Header row */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="animate-pulse h-8 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg mb-2" />
-            <div className="animate-pulse h-4 w-56 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+            <div className="animate-pulse h-8 w-40 bg-gray-200 dark:bg-zinc-700 rounded-lg mb-2" />
+            <div className="animate-pulse h-4 w-56 bg-gray-200 dark:bg-zinc-700 rounded-lg" />
           </div>
-          <div className="animate-pulse h-10 w-36 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+          <div className="animate-pulse h-10 w-36 bg-gray-200 dark:bg-zinc-700 rounded-lg" />
         </div>
 
         {/* Four stat cards */}
@@ -308,7 +308,7 @@ export default function AnalyticsPage() {
 
   return (
     // analyticsRef is attached here so the image capture knows what to photograph
-    <div ref={analyticsRef} className="p-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
+    <div ref={analyticsRef} className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

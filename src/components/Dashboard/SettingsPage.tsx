@@ -51,7 +51,7 @@ export default function SettingsPage() {
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-zinc-700 dark:text-gray-300"
               />
             </div>
 
@@ -80,7 +80,7 @@ export default function SettingsPage() {
                   day: 'numeric',
                 })}
                 disabled
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 dark:bg-zinc-700 dark:text-gray-300"
               />
             </div>
           </div>
@@ -95,7 +95,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-gray-700 dark:text-gray-300">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:bg-zinc-700 dark:text-gray-300">
               <div>
                 <p className="font-medium text-gray-900 dark:text-gray-300">Show Confidence Scores</p>
                 <p className="text-sm text-gray-500 dark:text-blue-500">

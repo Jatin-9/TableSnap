@@ -2,6 +2,7 @@ import { Table2, Menu, X, Sun, Moon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const navLinks = [
   { href: '#features', label: 'Features' },
@@ -11,6 +12,8 @@ const navLinks = [
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { user, loading } = useAuth();
+  const isLoggedIn = !loading && !!user;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
@@ -46,18 +49,29 @@ export default function Navbar() {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <Link
-              to="/login"
-              className="text-sm px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/login"
-              className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
-            >
-              Get Started
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                to="/dashboard"
+                className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+              >
+                Dashboard →
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-sm px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/login"
+                  className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -95,18 +109,30 @@ export default function Navbar() {
               </a>
             ))}
             <div className="pt-3 flex flex-col gap-2">
-              <Link
-                to="/login"
-                className="w-full py-2 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-center hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm"
-              >
-                Log in
-              </Link>
-              <Link
-                to="/login"
-                className="w-full py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-center text-sm font-medium transition-colors"
-              >
-                Get Started
-              </Link>
+              {isLoggedIn ? (
+                <Link
+                  to="/dashboard"
+                  onClick={() => setIsOpen(false)}
+                  className="w-full py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-center text-sm font-medium transition-colors"
+                >
+                  Dashboard →
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="w-full py-2 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-center hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm"
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="w-full py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-center text-sm font-medium transition-colors"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { Languages, MessageSquare, Layers, Send, Download, BarChart3 } from 'lucide-react';
+import { Languages, MessageSquare, Layers, Send, BarChart3, Sparkles } from 'lucide-react';
 
 const features = [
   {
@@ -12,6 +12,16 @@ const features = [
     borderColor: 'border-cyan-500/20',
   },
   {
+    icon: Sparkles,
+    title: 'Language Enrichment',
+    description: 'Language tables are automatically enriched with pronunciation, romanization, and example sentences — no extra steps.',
+    badge: 'Unique',
+    highlight: null,
+    color: 'text-violet-400',
+    bgColor: 'bg-violet-500/10',
+    borderColor: 'border-violet-500/20',
+  },
+  {
     icon: MessageSquare,
     title: 'AI Chat',
     description: 'Ask questions about your tables in plain English. "Find all expenses over $100"',
@@ -23,8 +33,8 @@ const features = [
   },
   {
     icon: Layers,
-    title: 'Flashcard Mode',
-    description: 'Turn any 2-column table into a flashcard deck instantly. Perfect for studying.',
+    title: 'Flashcard Study',
+    description: 'Turn any 2-column table into a flashcard deck instantly. Perfect for language learning.',
     badge: null,
     highlight: null,
     color: 'text-emerald-400',
@@ -34,7 +44,7 @@ const features = [
   {
     icon: Send,
     title: 'Anki Integration',
-    description: 'Send cards directly to Anki desktop with one click. Seamless workflow.',
+    description: 'Send cards directly to Anki desktop with one click. Seamless study workflow.',
     badge: 'Integration',
     highlight: null,
     color: 'text-indigo-400',
@@ -42,20 +52,10 @@ const features = [
     borderColor: 'border-indigo-500/20',
   },
   {
-    icon: Download,
-    title: 'Smart Export',
-    description: 'CSV, clipboard, plain text. Your data, your format. Export anywhere.',
-    badge: null,
-    highlight: null,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/10',
-    borderColor: 'border-amber-500/20',
-  },
-  {
     icon: BarChart3,
     title: 'Analytics Dashboard',
-    description: 'Track your learning and usage over time with beautiful charts and insights.',
-    badge: 'Pro',
+    description: 'Track your learning and usage over time with charts — uploads, tags, languages, and more.',
+    badge: null,
     highlight: null,
     color: 'text-rose-400',
     bgColor: 'bg-rose-500/10',

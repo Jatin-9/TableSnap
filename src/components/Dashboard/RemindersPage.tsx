@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bell, BellOff, Mail, Calendar, Loader2, CheckCircle, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Reminder } from '../../lib/supabase';
+import { RemindersSkeleton } from '../ui/Skeleton';
 
 export default function RemindersPage() {
   const { user } = useAuth();
@@ -137,13 +138,7 @@ export default function RemindersPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-      </div>
-    );
-  }
+  if (loading) return <RemindersSkeleton />;
 
   return (
     <div className="p-6 max-w-2xl">
@@ -160,7 +155,7 @@ export default function RemindersPage() {
       <div className="dashboard-card overflow-hidden">
 
         {/* Card header — shows which email + the on/off toggle */}
-        <div className="flex items-center gap-4 p-6 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center gap-4 p-6 border-b border-gray-100 dark:border-zinc-800">
           <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
             <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
           </div>
@@ -176,7 +171,7 @@ export default function RemindersPage() {
           <button
             onClick={() => setEnabled((prev) => !prev)}
             className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
-              enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-zinc-700'
             }`}
             aria-label={enabled ? 'Disable reminders' : 'Enable reminders'}
           >
@@ -195,7 +190,7 @@ export default function RemindersPage() {
           <div className={`flex items-center gap-3 p-4 rounded-xl ${
             enabled
               ? 'bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30'
-              : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+              : 'bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700'
           }`}>
             {enabled ? (
               <Bell className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
@@ -224,7 +219,7 @@ export default function RemindersPage() {
                   className={`p-4 rounded-xl border-2 text-left transition-all ${
                     frequency === 'daily'
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      : 'border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <p className={`font-semibold text-sm ${
@@ -238,7 +233,7 @@ export default function RemindersPage() {
                   className={`p-4 rounded-xl border-2 text-left transition-all ${
                     frequency === 'weekly'
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      : 'border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <p className={`font-semibold text-sm ${
@@ -251,7 +246,7 @@ export default function RemindersPage() {
           )}
 
           {/* Preview of what the email contains */}
-          <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
+          <div className="rounded-xl bg-gray-50 dark:bg-zinc-800 p-4">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
               What you'll receive
             </p>
@@ -290,7 +285,7 @@ export default function RemindersPage() {
           <button
             onClick={sendTestEmail}
             disabled={sending || !reminder}
-            className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold py-3 rounded-xl transition-colors disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 font-semibold py-3 rounded-xl transition-colors disabled:opacity-40"
             title={!reminder ? 'Save preferences first' : 'Send a test email now'}
           >
             {sending ? (
@@ -312,7 +307,7 @@ export default function RemindersPage() {
             </p>
           )}
           {testDetail && (
-            <pre className="text-xs bg-gray-100 dark:bg-gray-800 rounded-xl p-3 overflow-x-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+            <pre className="text-xs bg-gray-100 dark:bg-zinc-800 rounded-xl p-3 overflow-x-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
               {testDetail}
             </pre>
           )}

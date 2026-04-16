@@ -43,7 +43,7 @@ export default function SharedTablePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-zinc-950">
         <p className="text-gray-500 dark:text-gray-400 text-lg">Loading table...</p>
       </div>
     );
@@ -51,7 +51,7 @@ export default function SharedTablePage() {
 
   if (notFound) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-zinc-950 gap-4">
         <p className="text-2xl font-bold text-gray-800 dark:text-white">Table not found</p>
         <p className="text-gray-500 dark:text-gray-400">
           This link may be invalid or the table may have been deleted.
@@ -61,9 +61,9 @@ export default function SharedTablePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950">
       {/* Top bar — branding so viewers know where this came from */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center gap-3">
+      <header className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 px-6 py-4 flex items-center gap-3">
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
           <Table2 className="w-5 h-5 text-white" />
         </div>
@@ -107,7 +107,7 @@ export default function SharedTablePage() {
         </div>
 
         {/* The table itself */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-x-auto">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <tr>
@@ -127,7 +127,7 @@ export default function SharedTablePage() {
                   key={idx}
                   className={
                     idx % 2 === 0
-                      ? 'bg-white dark:bg-gray-900'
+                      ? 'bg-white dark:bg-zinc-900'
                       : 'bg-gray-50 dark:bg-gray-800/50'
                   }
                 >

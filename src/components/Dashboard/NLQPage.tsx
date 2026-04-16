@@ -234,10 +234,10 @@ export default function NLQPage() {
 
       {/* ── Chat history sidebar ─────────────────────────────────────────── */}
       {sidebarOpen && (
-        <div className="w-44 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800/60 bg-white dark:bg-gray-900/95">
+        <div className="w-44 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/95">
 
           {/* New Chat button — top of sidebar */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-800/60">
+          <div className="p-3 border-b border-gray-200 dark:border-zinc-800/60">
             <button
               onClick={startNewChat}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -266,8 +266,8 @@ export default function NLQPage() {
                     onClick={() => openSession(session)}
                     className={`group relative flex items-start gap-2 px-3 py-2 cursor-pointer transition-colors ${
                       isActive
-                        ? 'bg-gray-100 dark:bg-gray-800/60'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'
+                        ? 'bg-gray-100 dark:bg-zinc-800/60'
+                        : 'hover:bg-gray-50 dark:hover:bg-zinc-800/40'
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
@@ -305,7 +305,7 @@ export default function NLQPage() {
         <button
           onClick={() => setSidebarOpen((prev) => !prev)}
           title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          className="h-10 w-5 flex items-center justify-center rounded-r-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-300 transition-colors"
+          className="h-10 w-5 flex items-center justify-center rounded-r-md bg-gray-200 hover:bg-gray-300 dark:bg-zinc-700 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-300 transition-colors"
         >
           {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
@@ -349,7 +349,7 @@ export default function NLQPage() {
                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                   msg.role === 'assistant'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 dark:bg-gray-600 text-white'
+                    : 'bg-gray-700 dark:bg-zinc-600 text-white'
                 }`}
               >
                 {msg.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
@@ -359,7 +359,7 @@ export default function NLQPage() {
               <div
                 className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed ${
                   msg.role === 'assistant'
-                    ? 'bg-white dark:bg-gray-800/60 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700/50'
+                    ? 'bg-white dark:bg-zinc-800/60 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-zinc-700/50'
                     : 'bg-blue-600 text-white'
                 }`}
               >
@@ -374,7 +374,7 @@ export default function NLQPage() {
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                 <Bot className="w-4 h-4 text-white" />
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 flex items-center gap-2">
+              <div className="px-4 py-3 rounded-2xl bg-white dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700/50 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                 <span className="text-sm text-gray-500 dark:text-gray-400">Thinking...</span>
               </div>
@@ -393,8 +393,8 @@ export default function NLQPage() {
         )}
 
         {/* Input bar — single-line, compact */}
-        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800/60">
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700/80 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-zinc-800/60">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/80 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
             <input
               type="text"
               value={input}

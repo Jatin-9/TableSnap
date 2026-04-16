@@ -579,7 +579,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-950 p-6">
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
@@ -604,10 +604,10 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         </div>
 
         {/* Drop zone */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-gray-900 dark:border-gray-800 mb-6">
+        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 dark:bg-zinc-900 dark:border-zinc-800 mb-6">
 
           {/* Status bar */}
-          <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-3">
+          <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700 dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-200 flex flex-wrap items-center gap-3">
             <span>
               Mode: <span className="font-semibold">Fast + Enrichment — {BATCH_SIZE} images in parallel</span>
             </span>
@@ -725,10 +725,10 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
             {imageQueue.map((item, index) => (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl shadow-lg border border-gray-200 dark:bg-gray-900 dark:border-gray-800 overflow-hidden"
+                className="bg-white rounded-2xl shadow-lg border border-gray-200 dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden"
               >
                 {/* Card header */}
-                <div className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-zinc-800">
                   <img
                     src={item.preview}
                     alt={item.file.name}
@@ -811,7 +811,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                     )}
 
                     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                      <table className="w-full text-sm bg-white dark:bg-gray-900">
+                      <table className="w-full text-sm bg-white dark:bg-zinc-900">
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-gray-700">
                             {item.data.columnNames.map((col) => (
@@ -824,7 +824,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                         <tbody>
                           {item.data.tableData.length > 0 ? (
                             item.data.tableData.map((row, rowIdx) => (
-                              <tr key={rowIdx} className="border-b border-gray-100 dark:border-gray-800">
+                              <tr key={rowIdx} className="border-b border-gray-100 dark:border-zinc-800">
                                 {item.data!.columnNames.map((col) => (
                                   <td key={col} className="p-2 text-gray-900 dark:text-gray-100">
                                     {row[col] ?? ''}

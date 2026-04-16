@@ -6,29 +6,33 @@ const plans = [
     name: 'Free',
     price: '$0',
     period: 'forever',
-    description: 'Perfect to start',
+    description: 'Try everything — no card needed',
     features: [
-      '10 table extractions/month',
-      'PDF support (up to 10 pages)',
-      'AI chat assistance',
-      'CSV & TXT export',
-      'Public sharing',
+      '10 uploads / month',
+      '25 tables stored',
+      '20 AI chat queries / month',
+      'PDF support (up to 5 pages)',
+      'Language enrichment',
+      'Flashcard & study mode',
+      'All export formats (CSV, TXT, Anki)',
+      'Analytics dashboard',
+      'Study reminders',
+      'Public shareable links',
     ],
-    cta: 'Start for free',
+    cta: 'Get started free',
     popular: false,
   },
   {
     name: 'Pro',
     price: '$9',
     period: '/month',
-    description: 'For power users',
+    description: 'For power users who go all-in',
     features: [
-      'Unlimited extractions',
-      'Unlimited PDF pages',
-      'Flashcard mode',
+      'Unlimited uploads',
+      'Unlimited table storage',
+      'Unlimited AI chat',
+      'PDF support (up to 10 pages)',
       'Priority AI processing',
-      'Full chat history',
-      'Advanced analytics',
       'Priority support',
     ],
     cta: 'Upgrade to Pro',
@@ -48,11 +52,11 @@ export default function PricingSection() {
             Simple, <span className="gradient-text">Transparent</span> Pricing
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-lg">
-            Start free, upgrade when you need more
+            All features free forever — Pro just removes the limits
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto items-start">
           {plans.map((plan) => (
             <div
               key={plan.name}
@@ -80,7 +84,7 @@ export default function PricingSection() {
               <ul className="space-y-3 mb-8">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-center gap-3 text-sm">
-                    <Check className="w-5 h-5 text-blue-500 shrink-0" />
+                    <Check className="w-4 h-4 text-blue-500 shrink-0" />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -91,7 +95,7 @@ export default function PricingSection() {
                 className={`block w-full py-3 px-4 rounded-xl text-center font-medium transition-colors ${
                   plan.popular
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
+                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-900 dark:text-white'
                 }`}
               >
                 {plan.cta}
@@ -100,8 +104,9 @@ export default function PricingSection() {
           ))}
         </div>
 
+        {/* Reassurance line */}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-8">
-          No credit card required to start
+          No credit card required · Cancel anytime
         </p>
       </div>
     </section>

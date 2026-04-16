@@ -1,8 +1,12 @@
 import { Sparkles, ArrowRight, Play, Table2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FloatingWords from './FloatingWords';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function HeroSection() {
+  const { user, loading } = useAuth();
+  const isLoggedIn = !loading && !!user;
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background gradient */}
@@ -29,7 +33,7 @@ export default function HeroSection() {
           {/* Badge */}
           <span className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium rounded-full bg-blue-600/10 border border-blue-600/20 text-blue-500">
             <Sparkles className="w-4 h-4 mr-2" />
-            Powered by AI OCR
+            {isLoggedIn ? `Welcome back, ${user!.email?.split('@')[0]}` : 'Powered by AI OCR'}
           </span>
 
           {/* Headline */}
@@ -47,13 +51,23 @@ export default function HeroSection() {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link
-              to="/login"
-              className="inline-flex items-center text-base px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all"
-            >
-              Get Started Free
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center text-base px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all"
+              >
+                Go to Dashboard
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex items-center text-base px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all"
+              >
+                Get Started Free
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Link>
+            )}
             <a
               href="#how-it-works"
               className="inline-flex items-center text-base px-8 py-4 rounded-xl border border-blue-600/30 bg-blue-600/5 hover:bg-blue-600/15 hover:border-blue-600/50 text-gray-900 dark:text-white font-semibold transition-all"

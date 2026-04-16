@@ -18,7 +18,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
   }
 
   if (!supabaseUser) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (requireAdmin) {

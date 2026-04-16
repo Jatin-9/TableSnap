@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import {
-  Filter, Download, Eye, Trash2, Pencil, Check, X, Plus, Layers,
+  Download, Eye, Trash2, Pencil, Check, X, Plus, Layers,
   CheckSquare, Square, Clipboard, BookOpen, Share2, Search, FileText,
 } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
@@ -47,6 +47,7 @@ export default function TablesPage() {
   // ── Edit modal state ──────────────────────────────────────────────────────
   const [editingSnapshot, setEditingSnapshot] = useState<TableSnapshot | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [editColumns, setEditColumns] = useState<string[]>([]);
   const [editRows, setEditRows] = useState<Record<string, string>[]>([]);
   const [editSaving, setEditSaving] = useState(false);
@@ -60,10 +61,7 @@ export default function TablesPage() {
   const [deleteAfterMerge, setDeleteAfterMerge] = useState(true);
   const [mergeSaving, setMergeSaving] = useState(false);
 
-  const filters = [
-    'All', 'Languages', 'Expenses', 'Inventory',
-    'Shopping', 'Recipes', 'Fitness', 'Dated Records', 'General',
-  ];
+  const filters = ['All', 'Languages', 'Expenses', 'General'];
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -247,16 +245,90 @@ export default function TablesPage() {
 
   const getLanguageFlag = (languageCode?: string | null) => {
     switch ((languageCode || '').toLowerCase()) {
-      case 'ja': return '🇯🇵';
-      case 'hi': return '🇮🇳';
-      case 'zh': return '🇨🇳';
-      case 'ko': return '🇰🇷';
-      case 'es': return '🇪🇸';
-      case 'fr': return '🇫🇷';
-      case 'de': return '🇩🇪';
-      case 'it': return '🇮🇹';
-      case 'pt': return '🇵🇹';
-      default:   return null;
+      // East Asian
+      case 'ja':    return '🇯🇵'; // Japanese
+      case 'ko':    return '🇰🇷'; // Korean
+      case 'zh':    return '🇨🇳'; // Chinese (Simplified)
+      case 'zh-tw': return '🇹🇼'; // Chinese (Traditional)
+      case 'zh-hk': return '🇭🇰'; // Cantonese / Hong Kong
+      // Southeast Asian
+      case 'th':    return '🇹🇭'; // Thai
+      case 'vi':    return '🇻🇳'; // Vietnamese
+      case 'id':    return '🇮🇩'; // Indonesian
+      case 'ms':    return '🇲🇾'; // Malay
+      case 'tl':    return '🇵🇭'; // Filipino / Tagalog
+      case 'my':    return '🇲🇲'; // Burmese
+      case 'km':    return '🇰🇭'; // Khmer
+      case 'lo':    return '🇱🇦'; // Lao
+      // South Asian
+      case 'hi':    return '🇮🇳'; // Hindi
+      case 'mr':    return '🇮🇳'; // Marathi
+      case 'ne':    return '🇳🇵'; // Nepali
+      case 'bn':    return '🇧🇩'; // Bengali
+      case 'ta':    return '🇱🇰'; // Tamil
+      case 'te':    return '🇮🇳'; // Telugu
+      case 'kn':    return '🇮🇳'; // Kannada
+      case 'ml':    return '🇮🇳'; // Malayalam
+      case 'gu':    return '🇮🇳'; // Gujarati
+      case 'pa':    return '🇮🇳'; // Punjabi
+      case 'or':    return '🇮🇳'; // Odia
+      case 'si':    return '🇱🇰'; // Sinhala
+      case 'ur':    return '🇵🇰'; // Urdu
+      // Middle Eastern
+      case 'ar':    return '🇸🇦'; // Arabic
+      case 'he':    return '🇮🇱'; // Hebrew
+      case 'fa':    return '🇮🇷'; // Persian / Farsi
+      case 'ps':    return '🇦🇫'; // Pashto
+      // European — Latin script
+      case 'en':    return '🇬🇧'; // English
+      case 'es':    return '🇪🇸'; // Spanish
+      case 'fr':    return '🇫🇷'; // French
+      case 'de':    return '🇩🇪'; // German
+      case 'pt':    return '🇵🇹'; // Portuguese
+      case 'it':    return '🇮🇹'; // Italian
+      case 'nl':    return '🇳🇱'; // Dutch
+      case 'sv':    return '🇸🇪'; // Swedish
+      case 'no':    return '🇳🇴'; // Norwegian
+      case 'da':    return '🇩🇰'; // Danish
+      case 'fi':    return '🇫🇮'; // Finnish
+      case 'pl':    return '🇵🇱'; // Polish
+      case 'cs':    return '🇨🇿'; // Czech
+      case 'sk':    return '🇸🇰'; // Slovak
+      case 'hu':    return '🇭🇺'; // Hungarian
+      case 'ro':    return '🇷🇴'; // Romanian
+      case 'hr':    return '🇭🇷'; // Croatian
+      case 'sl':    return '🇸🇮'; // Slovenian
+      case 'bs':    return '🇧🇦'; // Bosnian
+      case 'tr':    return '🇹🇷'; // Turkish
+      case 'sq':    return '🇦🇱'; // Albanian
+      case 'lt':    return '🇱🇹'; // Lithuanian
+      case 'lv':    return '🇱🇻'; // Latvian
+      case 'et':    return '🇪🇪'; // Estonian
+      case 'ga':    return '🇮🇪'; // Irish
+      case 'is':    return '🇮🇸'; // Icelandic
+      case 'mt':    return '🇲🇹'; // Maltese
+      case 'af':    return '🇿🇦'; // Afrikaans
+      // European — Cyrillic
+      case 'ru':    return '🇷🇺'; // Russian
+      case 'uk':    return '🇺🇦'; // Ukrainian
+      case 'bg':    return '🇧🇬'; // Bulgarian
+      case 'sr':    return '🇷🇸'; // Serbian
+      case 'mk':    return '🇲🇰'; // Macedonian
+      case 'be':    return '🇧🇾'; // Belarusian
+      case 'mn':    return '🇲🇳'; // Mongolian
+      case 'kk':    return '🇰🇿'; // Kazakh
+      // Other European scripts
+      case 'el':    return '🇬🇷'; // Greek
+      case 'ka':    return '🇬🇪'; // Georgian
+      case 'hy':    return '🇦🇲'; // Armenian
+      case 'az':    return '🇦🇿'; // Azerbaijani
+      // African
+      case 'am':    return '🇪🇹'; // Amharic
+      case 'sw':    return '🇰🇪'; // Swahili
+      case 'yo':    return '🇳🇬'; // Yoruba
+      case 'ig':    return '🇳🇬'; // Igbo
+      case 'ha':    return '🇳🇬'; // Hausa
+      default:      return null;
     }
   };
 
@@ -267,9 +339,15 @@ export default function TablesPage() {
 
   // ── Edit modal helpers ────────────────────────────────────────────────────
 
+  const EDITABLE_TAGS = ['Languages', 'Expenses', 'General'];
+
   const openEditModal = (snapshot: TableSnapshot) => {
     setEditingSnapshot(snapshot);
     setEditTitle(snapshot.title ?? '');
+    // Normalize to only the simplified tag list — old tags like 'Shopping' or
+    // 'Inventory' get dropped. If nothing matches, fall back to ['General'].
+    const normalised = snapshot.auto_tags.filter((t) => EDITABLE_TAGS.includes(t));
+    setEditTags(normalised.length > 0 ? normalised : ['General']);
     setEditColumns([...snapshot.column_names]);
     setEditRows(snapshot.table_data.map((row) => ({ ...row })));
   };
@@ -277,9 +355,16 @@ export default function TablesPage() {
   const closeEditModal = () => {
     setEditingSnapshot(null);
     setEditTitle('');
+    setEditTags([]);
     setEditColumns([]);
     setEditRows([]);
     setNewColName('');
+  };
+
+  const toggleEditTag = (tag: string) => {
+    setEditTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   };
 
   const handleColumnRename = (oldName: string, newName: string, colIndex: number) => {
@@ -336,6 +421,7 @@ export default function TablesPage() {
     setEditSaving(true);
     const payload = {
       title: editTitle.trim() || null,
+      auto_tags: editTags.length > 0 ? editTags : ['General'],
       column_names: editColumns,
       table_data: editRows,
       column_count: editColumns.length,
@@ -366,7 +452,7 @@ export default function TablesPage() {
       table_data: editRows,
       column_count: editColumns.length,
       row_count: editRows.length,
-      auto_tags: editingSnapshot.auto_tags,
+      auto_tags: editTags.length > 0 ? editTags : ['General'],
       ocr_confidence: editingSnapshot.ocr_confidence,
       dataset_type: editingSnapshot.dataset_type,
       language_code: editingSnapshot.language_code,
@@ -489,7 +575,7 @@ export default function TablesPage() {
             placeholder="Search tables..."
             value={searchInput}
             onChange={(e) => handleSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700/80 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-zinc-700/80 rounded-xl text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
           />
         </div>
         {/* Merge mode toggle — icon button next to search */}
@@ -499,16 +585,10 @@ export default function TablesPage() {
           className={`p-2.5 rounded-xl border transition-colors ${
             selectMode
               ? 'border-blue-500 bg-blue-600 text-white'
-              : 'border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+              : 'border-gray-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'
           }`}
         >
           <Layers className="w-4 h-4" />
-        </button>
-        <button
-          className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          title="Filter"
-        >
-          <Filter className="w-4 h-4" />
         </button>
       </div>
 
@@ -520,8 +600,8 @@ export default function TablesPage() {
             onClick={() => setSelectedFilter(filter)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               selectedFilter === filter
-                ? 'bg-white dark:bg-white text-gray-900 shadow-sm'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
             }`}
           >
             {filter}
@@ -612,7 +692,7 @@ export default function TablesPage() {
                           {snapshot.auto_tags.map((tag) => (
                             <span
                               key={tag}
-                              className="px-2.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-md text-xs font-medium"
+                              className="px-2.5 py-0.5 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-md text-xs font-medium"
                             >
                               {highlight(tag, searchQuery)}
                             </span>
@@ -627,28 +707,28 @@ export default function TablesPage() {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => setSelectedSnapshot(snapshot)}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"
                         title="View table"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => openEditModal(snapshot)}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-amber-500 transition-colors"
+                        className="p-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 hover:text-amber-600 transition-colors"
                         title="Edit table"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => exportToCSV(snapshot)}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-green-500 transition-colors"
+                        className="p-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 hover:text-green-600 transition-colors"
                         title="Export CSV"
                       >
                         <Download className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => deleteSnapshot(snapshot.id)}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"
+                        className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 hover:text-red-600 transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -697,7 +777,7 @@ export default function TablesPage() {
             onClick={() => setShowMergeModal(false)}
           >
             <div
-              className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-8 border border-gray-200 dark:border-gray-800/50"
+              className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 p-8 border border-gray-200 dark:border-zinc-800/50"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -705,7 +785,7 @@ export default function TablesPage() {
                   <Layers className="w-5 h-5 text-blue-500" />
                   Merge Tables
                 </h2>
-                <button onClick={() => setShowMergeModal(false)} className="p-2 hover:bg-gray-100 rounded-lg dark:hover:bg-gray-800">
+                <button onClick={() => setShowMergeModal(false)} className="p-2 hover:bg-gray-100 rounded-lg dark:hover:bg-zinc-800">
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
@@ -729,7 +809,7 @@ export default function TablesPage() {
                   value={mergeTitle}
                   onChange={(e) => setMergeTitle(e.target.value)}
                   placeholder="e.g. Japanese Vocab — All Chapters"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-zinc-800 dark:border-zinc-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
 
@@ -771,11 +851,11 @@ export default function TablesPage() {
           onClick={() => { setSelectedSnapshot(null); setAnkiStatus('idle'); setAnkiError(''); }}
         >
           <div
-            className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800/60 shadow-2xl overflow-hidden"
+            className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800/60 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 relative">
+            <div className="px-5 pt-5 pb-4 border-b border-gray-100 dark:border-zinc-800 relative">
               <div className="flex items-start gap-2 pr-10">
                 <h2 className="text-base font-bold text-gray-900 dark:text-white leading-snug">
                   {getDisplayTitle(selectedSnapshot)}
@@ -792,7 +872,7 @@ export default function TablesPage() {
               {/* Round close button */}
               <button
                 onClick={() => { setSelectedSnapshot(null); setAnkiStatus('idle'); setAnkiError(''); }}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 <X className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
               </button>
@@ -801,8 +881,8 @@ export default function TablesPage() {
             {/* Table */}
             <div className="flex-1 overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white dark:bg-gray-900">
-                  <tr className="border-b border-gray-100 dark:border-gray-800">
+                <thead className="sticky top-0 bg-white dark:bg-zinc-900">
+                  <tr className="border-b border-gray-100 dark:border-zinc-800">
                     {selectedSnapshot.column_names.map((col) => (
                       <th key={col} className="text-left px-4 py-2.5 font-semibold text-teal-500 dark:text-teal-400 text-xs uppercase tracking-wide">
                         {col}
@@ -814,8 +894,8 @@ export default function TablesPage() {
                   {selectedSnapshot.table_data.map((row, idx) => (
                     <tr
                       key={idx}
-                      className={`border-b border-gray-50 dark:border-gray-800/60 ${
-                        idx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-800/20'
+                      className={`border-b border-gray-50 dark:border-zinc-800/60 ${
+                        idx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-zinc-800/20'
                       }`}
                     >
                       {selectedSnapshot.column_names.map((col) => (
@@ -828,7 +908,7 @@ export default function TablesPage() {
             </div>
 
             {/* Footer: stats */}
-            <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
               <span>{selectedSnapshot.row_count} rows</span>
               <span className="opacity-40">•</span>
               <span>{selectedSnapshot.column_count} columns</span>
@@ -854,7 +934,7 @@ export default function TablesPage() {
 
               <button
                 onClick={() => exportToTXT(selectedSnapshot)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 text-white font-medium rounded-lg text-xs transition-colors"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white font-medium rounded-lg text-xs transition-colors"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Export TXT
@@ -862,7 +942,7 @@ export default function TablesPage() {
 
               <button
                 onClick={() => copyToClipboard(selectedSnapshot)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 text-white font-medium rounded-lg text-xs transition-colors"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white font-medium rounded-lg text-xs transition-colors"
               >
                 <Clipboard className="w-3.5 h-3.5" />
                 {copied ? 'Copied!' : 'Copy'}
@@ -894,7 +974,7 @@ export default function TablesPage() {
 
               <button
                 onClick={() => copyShareLink(selectedSnapshot)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 text-white font-medium rounded-lg text-xs transition-colors"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white font-medium rounded-lg text-xs transition-colors"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 {shareCopied ? 'Copied!' : 'Share'}
@@ -923,12 +1003,12 @@ export default function TablesPage() {
           onClick={closeEditModal}
         >
           <div
-            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-gray-900 p-8 border border-gray-200 dark:border-gray-800/50"
+            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-zinc-900 p-8 border border-gray-200 dark:border-zinc-800/50"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-2xl font-bold dark:text-white">Edit Table</h2>
-              <button onClick={closeEditModal} className="p-2 hover:bg-gray-100 rounded-lg dark:hover:bg-gray-800">
+              <button onClick={closeEditModal} className="p-2 hover:bg-gray-100 rounded-lg dark:hover:bg-zinc-800">
                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
@@ -940,9 +1020,35 @@ export default function TablesPage() {
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="e.g. Japanese Vocab Chapter 3, Monthly Expenses..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-zinc-800 dark:border-zinc-700 dark:text-white dark:placeholder-gray-400"
               />
               <p className="text-xs text-gray-400 mt-1 dark:text-gray-500">Leave blank to auto-display column names as the title</p>
+            </div>
+
+            {/* Tags */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tags</label>
+              <div className="flex items-center gap-2">
+                {[
+                  { tag: 'Languages', on: 'bg-purple-600 text-white border-purple-600', off: 'border-purple-300 text-purple-600 dark:border-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20' },
+                  { tag: 'Expenses',  on: 'bg-amber-500 text-white border-amber-500',   off: 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20' },
+                  { tag: 'General',   on: 'bg-zinc-600 text-white border-zinc-600',      off: 'border-gray-300 text-gray-600 dark:border-zinc-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800' },
+                ].map(({ tag, on, off }) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleEditTag(tag)}
+                    className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${editTags.includes(tag) ? on : off}`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {editTags.length === 0 && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                    At least one tag required — will default to General on save
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mb-6">
@@ -951,9 +1057,9 @@ export default function TablesPage() {
                 <span className="font-normal text-gray-400 ml-2 dark:text-gray-500">— click any header or cell to edit</span>
               </p>
 
-              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-zinc-700">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                  <thead className="bg-gray-50 dark:bg-zinc-800">
                     <tr>
                       {editColumns.map((col, colIdx) => (
                         <th key={colIdx} className="p-2 text-left group">
@@ -979,14 +1085,14 @@ export default function TablesPage() {
                   </thead>
                   <tbody>
                     {editRows.map((row, rowIdx) => (
-                      <tr key={rowIdx} className="border-t border-gray-100 dark:border-gray-800 group">
+                      <tr key={rowIdx} className="border-t border-gray-100 dark:border-zinc-800 group">
                         {editColumns.map((col, colIdx) => (
                           <td key={colIdx} className="p-2">
                             <input
                               type="text"
                               value={row[col] ?? ''}
                               onChange={(e) => handleCellEdit(rowIdx, col, e.target.value)}
-                              className="w-full px-2 py-1 text-gray-900 bg-white border border-transparent hover:border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-900 dark:text-gray-100 dark:hover:border-gray-600"
+                              className="w-full px-2 py-1 text-gray-900 bg-white border border-transparent hover:border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-zinc-900 dark:text-gray-100 dark:hover:border-gray-600"
                             />
                           </td>
                         ))}
@@ -1020,7 +1126,7 @@ export default function TablesPage() {
                   value={newColName}
                   onChange={(e) => setNewColName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addColumn()}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-400"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-zinc-800 dark:border-zinc-600 dark:text-gray-100 dark:placeholder:text-gray-400"
                 />
                 <button
                   onClick={addColumn}

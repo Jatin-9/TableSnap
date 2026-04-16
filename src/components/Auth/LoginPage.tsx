@@ -38,7 +38,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-white dark:bg-gray-950">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-white dark:bg-zinc-950">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-white via-white to-blue-600/5 dark:from-gray-950 dark:via-gray-950 dark:to-blue-600/5" />
 
@@ -51,7 +51,7 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
-        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl shadow-blue-600/5 border border-gray-200/80 dark:border-gray-800/60">
+        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl shadow-blue-600/5 border border-gray-200/80 dark:border-zinc-800/60">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <Link to="/" className="flex items-center gap-2 mb-4 group">
@@ -161,7 +161,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-gray-200 dark:border-gray-700/60" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-white/80 dark:bg-gray-900/80 px-2 text-gray-400 dark:text-gray-500">
+              <span className="bg-white/80 dark:bg-zinc-900/80 px-2 text-gray-400 dark:text-gray-500">
                 or continue with
               </span>
             </div>

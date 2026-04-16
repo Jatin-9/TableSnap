@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Shuffle, ArrowLeft, ArrowRight, RotateCcw, BookOpen, Repeat2 } from 'lucide-react';
+import { StudySkeleton } from '../ui/Skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,9 @@ export default function StudyPage() {
       .eq('column_count', 2)
       .order('created_at', { ascending: false });
 
-    setTwoColTables(data ?? []);
+    const tables = data ?? [];
+    setTwoColTables(tables);
+    localStorage.setItem('study_table_count', String(tables.length));
     setLoading(false);
   };
 
@@ -143,6 +146,8 @@ export default function StudyPage() {
   // RENDER — PICKER PHASE
   // ─────────────────────────────────────────────────────────────────────────
 
+  if (loading) return <StudySkeleton />;
+
   if (!cards) {
     return (
       <div className="p-6">
@@ -153,9 +158,7 @@ export default function StudyPage() {
           </p>
         </div>
 
-        {loading ? (
-          <p className="text-gray-400">Loading tables...</p>
-        ) : twoColTables.length === 0 ? (
+        {twoColTables.length === 0 ? (
           <div className="mt-12 text-center">
             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg font-medium">No 2-column tables found</p>
@@ -176,7 +179,7 @@ export default function StudyPage() {
                   className={`cursor-pointer rounded-xl border-2 p-5 transition-all ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-600'
+                      : 'bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:border-blue-400 dark:hover:border-blue-600'
                   }`}
                 >
                   <p className="font-semibold text-gray-900 dark:text-white mb-2 truncate">
@@ -190,7 +193,7 @@ export default function StudyPage() {
                       Front: {isSelected && swapped ? col2 : col1}
                     </span>
                     <span>→</span>
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded dark:bg-gray-700 dark:text-gray-300">
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded dark:bg-zinc-700 dark:text-gray-300">
                       Back: {isSelected && swapped ? col1 : col2}
                     </span>
                   </div>
@@ -213,7 +216,7 @@ export default function StudyPage() {
             {/* Swap front/back globally for all selected tables */}
             <button
               onClick={() => setSwapped((s) => !s)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors dark:border-zinc-600 dark:text-gray-300 dark:hover:bg-zinc-800 text-sm font-medium"
             >
               <Repeat2 className="w-4 h-4" />
               {swapped ? 'Swapped: Col 2 → Front' : 'Swap Front / Back'}
@@ -271,7 +274,7 @@ export default function StudyPage() {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full max-w-2xl h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mb-10">
+      <div className="w-full max-w-2xl h-1.5 bg-gray-200 dark:bg-zinc-700 rounded-full mb-10">
         <div
           className="h-full bg-blue-500 rounded-full transition-all duration-300"
           style={{ width: `${((currentIndex + 1) / cards.length) * 100}%` }}
@@ -294,7 +297,7 @@ export default function StudyPage() {
         >
           {/* FRONT face */}
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-white dark:bg-gray-900 border-2 border-blue-200 dark:border-blue-800 shadow-lg p-8"
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border-2 border-blue-200 dark:border-blue-800 shadow-lg p-8"
             style={{ backfaceVisibility: 'hidden' }}
           >
             {/* Each card carries its own label so it's correct even when
@@ -327,7 +330,7 @@ export default function StudyPage() {
       <div className="flex items-center gap-6 mt-10">
         <button
           onClick={prev}
-          className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200"
+          className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-gray-200"
         >
           <ArrowLeft className="w-5 h-5" />
           Prev
@@ -335,7 +338,7 @@ export default function StudyPage() {
 
         <button
           onClick={next}
-          className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200"
+          className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-gray-200"
         >
           Next
           <ArrowRight className="w-5 h-5" />

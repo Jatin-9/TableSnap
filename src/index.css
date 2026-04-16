@@ -65,5 +65,5 @@ body {
 
 /* Dashboard card — solid, visible in both light and dark mode */
 .dashboard-card {
-  @apply bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800;
+  @apply bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800;
 }
