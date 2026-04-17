@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useUsage } from '../../hooks/useUsage';
 import UpgradeModal from '../ui/UpgradeModal';
+import { AiColumnHeader } from '../ui/AiColumnHeader';
 // Vite resolves this to the worker file URL at build time.
 // Importing it statically as a URL string means pdfjs can load the worker
 // without any runtime bundler tricks — the PDF JS is still loaded lazily below.
@@ -835,11 +836,14 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
                       <table className="w-full text-sm bg-white dark:bg-zinc-900">
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-gray-700">
-                            {item.data.columnNames.map((col) => (
-                              <th key={col} className="text-left p-2 font-semibold text-gray-900 dark:text-white">
-                                {col}
-                              </th>
-                            ))}
+                            {item.data.columnNames.map((col) => {
+                              const isAi = (item.data!.addedColumns ?? []).includes(col);
+                              return (
+                                <th key={col} className={`text-left p-2 font-semibold ${isAi ? '' : 'text-gray-900 dark:text-white'}`}>
+                                  <AiColumnHeader name={col} isAi={isAi} />
+                                </th>
+                              );
+                            })}
                           </tr>
                         </thead>
                         <tbody>

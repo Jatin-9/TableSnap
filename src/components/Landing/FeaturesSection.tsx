@@ -1,4 +1,4 @@
-import { Languages, MessageSquare, Layers, Send, BarChart3, Sparkles } from 'lucide-react';
+import { Languages, MessageSquare, Layers, Send, BarChart3, Sparkles, Share2, Bell } from 'lucide-react';
 
 const features = [
   {
@@ -60,6 +60,26 @@ const features = [
     color: 'text-rose-400',
     bgColor: 'bg-rose-500/10',
     borderColor: 'border-rose-500/20',
+  },
+  {
+    icon: Share2,
+    title: 'Public Sharing',
+    description: 'Share any table with a single link — no login required for viewers. Perfect for collaborating or publishing data.',
+    badge: null,
+    highlight: null,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+  },
+  {
+    icon: Bell,
+    title: 'Study Reminders',
+    description: 'Get daily or weekly email digests of your saved tables to keep you reviewing vocabulary and notes consistently.',
+    badge: null,
+    highlight: null,
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-500/10',
+    borderColor: 'border-pink-500/20',
   },
 ];
 

@@ -26,7 +26,7 @@ const CONFIG: Record<LimitType, {
     title: "You've used all your uploads",
     limit: LIMITS.UPLOADS_PER_MONTH,
     unit: 'uploads this month',
-    description: 'Free accounts can extract up to 10 tables per month. Upgrade to Pro for unlimited extractions.',
+    description: 'Free accounts can extract up to 10 tables per month. Upgrade to Pro for 100 uploads/month.',
   },
   storage: {
     icon: Database,
@@ -35,7 +35,7 @@ const CONFIG: Record<LimitType, {
     title: "You've hit your storage limit",
     limit: LIMITS.TOTAL_TABLES,
     unit: 'tables stored',
-    description: 'Free accounts can store up to 25 tables. Upgrade to Pro for unlimited storage.',
+    description: 'Free accounts can store up to 25 tables. Upgrade to Pro for 500 tables.',
   },
   chat: {
     icon: MessageSquare,
@@ -44,7 +44,7 @@ const CONFIG: Record<LimitType, {
     title: "You've used all your AI queries",
     limit: LIMITS.CHAT_QUERIES_PER_MONTH,
     unit: 'AI queries this month',
-    description: 'Free accounts get 20 AI chat queries per month. Upgrade to Pro for unlimited queries.',
+    description: 'Free accounts get 20 AI chat queries per month. Upgrade to Pro for 200 queries/month.',
   },
 };
 
@@ -106,7 +106,7 @@ export default function UpgradeModal({ isOpen, onClose, limitType, current }: Up
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
           >
             <Sparkles className="w-4 h-4" />
-            Upgrade to Pro — $9/month
+            Upgrade to Pro — $8/month
           </button>
           <button
             onClick={onClose}

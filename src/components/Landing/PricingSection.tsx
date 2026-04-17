@@ -11,7 +11,7 @@ const plans = [
       '10 uploads / month',
       '25 tables stored',
       '20 AI chat queries / month',
-      'PDF support (up to 5 pages)',
+      'PDF support',
       'Language enrichment',
       'Flashcard & study mode',
       'All export formats (CSV, TXT, Anki)',
@@ -24,14 +24,14 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: '$9',
+    price: '$8',
     period: '/month',
     description: 'For power users who go all-in',
     features: [
-      'Unlimited uploads',
-      'Unlimited table storage',
-      'Unlimited AI chat',
-      'PDF support (up to 10 pages)',
+      '100 uploads / month',
+      '500 tables stored',
+      '200 AI chat queries / month',
+      'PDF support',
       'Priority AI processing',
       'Priority support',
     ],
@@ -104,9 +104,12 @@ export default function PricingSection() {
           ))}
         </div>
 
-        {/* Reassurance line */}
+        {/* Reassurance lines */}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-8">
           No credit card required · Cancel anytime
+        </p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500 mt-2">
+          More features and higher limits coming soon.
         </p>
       </div>
     </section>

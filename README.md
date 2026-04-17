@@ -19,14 +19,15 @@ TableSnap is an AI-powered web app that extracts structured tables from photos a
 - **Email Reminders** — Daily or weekly digest emails to keep you studying
 - **Dark / Light Mode** — Persisted per account across devices
 
-### Free Tier Limits
-| Resource | Limit |
-|---|---|
-| Uploads per month | 10 |
-| Tables stored | 25 |
-| AI chat queries per month | 20 |
+### Pricing
 
-Pro removes all limits.
+| | Free | Pro ($8/month) |
+|---|---|---|
+| Uploads / month | 10 | 100 |
+| Tables stored | 25 | 500 |
+| AI chat queries / month | 20 | 200 |
+| PDF support | ✓ | ✓ |
+| All other features | ✓ | ✓ |
 
 ---
 

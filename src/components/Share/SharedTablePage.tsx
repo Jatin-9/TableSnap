@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase, TableSnapshot } from '../../lib/supabase';
 import { Table2 } from 'lucide-react';
+import { AiColumnHeader } from '../ui/AiColumnHeader';
 
 // This page is fully public — no login required.
 // It fetches a single table by the ID in the URL and renders it read-only.
@@ -111,14 +112,17 @@ export default function SharedTablePage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                {snapshot!.column_names.map((col) => (
-                  <th
-                    key={col}
-                    className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-300"
-                  >
-                    {col}
-                  </th>
-                ))}
+                {snapshot!.column_names.map((col) => {
+                  const isAi = (snapshot!.added_columns ?? []).includes(col);
+                  return (
+                    <th
+                      key={col}
+                      className={`text-left px-4 py-3 font-semibold ${isAi ? '' : 'text-gray-700 dark:text-gray-300'}`}
+                    >
+                      <AiColumnHeader name={col} isAi={isAi} />
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

@@ -9,6 +9,7 @@ import {
 import { TableCardSkeleton } from '../ui/Skeleton';
 import UpgradeModal from '../ui/UpgradeModal';
 import { useUsage, LIMITS } from '../../hooks/useUsage';
+import { AiColumnHeader } from '../ui/AiColumnHeader';
 
 // Wraps each match of `query` in a yellow highlight span.
 function highlight(text: string, query: string) {
@@ -921,11 +922,14 @@ export default function TablesPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white dark:bg-zinc-900">
                   <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {selectedSnapshot.column_names.map((col) => (
-                      <th key={col} className="text-left px-4 py-2.5 font-semibold text-teal-500 dark:text-teal-400 text-xs uppercase tracking-wide">
-                        {col}
-                      </th>
-                    ))}
+                    {selectedSnapshot.column_names.map((col) => {
+                      const isAi = (selectedSnapshot.added_columns ?? []).includes(col);
+                      return (
+                        <th key={col} className={`text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide ${isAi ? '' : 'text-teal-500 dark:text-teal-400'}`}>
+                          <AiColumnHeader name={col} isAi={isAi} />
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
