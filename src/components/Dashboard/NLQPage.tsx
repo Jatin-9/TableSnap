@@ -218,8 +218,8 @@ export default function NLQPage() {
 
       const updatedConversation = [...fullConversation, aiMessage];
       setMessages((prev) => [...prev, aiMessage]);
-      // Tick up the monthly query counter in localStorage so the limit stays accurate
-      incrementChatCount();
+      // Record this query in Supabase so the limit is enforced server-side
+      await incrementChatCount();
       await saveSession(updatedConversation, userMessage, activeSessionId);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Something went wrong';

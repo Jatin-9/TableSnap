@@ -11,33 +11,13 @@ export const LIMITS = {
   WARN_THRESHOLD: 2,
 };
 
-// localStorage key format: "tablesnap_chat_YYYY-MM"
-function chatStorageKey() {
-  const now = new Date();
-  return `tablesnap_chat_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function getChatCount(): number {
-  try {
-    return parseInt(localStorage.getItem(chatStorageKey()) ?? '0', 10) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function setChatCount(n: number) {
-  try {
-    localStorage.setItem(chatStorageKey(), String(n));
-  } catch { /* ignore */ }
-}
-
 // ── Hook ───────────────────────────────────────────────────────────────────────
 export function useUsage() {
   const { user } = useAuth();
 
   const [uploadsThisMonth, setUploadsThisMonth] = useState(0);
   const [totalTables, setTotalTables] = useState(0);
-  const [chatQueriesThisMonth, setChatQueriesThisMonth] = useState(getChatCount);
+  const [chatQueriesThisMonth, setChatQueriesThisMonth] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchCounts = useCallback(async () => {
@@ -47,7 +27,7 @@ export function useUsage() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const [monthResult, totalResult] = await Promise.all([
+    const [uploadsResult, totalResult, chatResult] = await Promise.all([
       // Uploads this month
       supabase
         .from('table_snapshots')
@@ -59,10 +39,17 @@ export function useUsage() {
         .from('table_snapshots')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id),
+      // AI queries sent this month — tracked server-side so it can't be spoofed
+      supabase
+        .from('chat_queries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', monthStart),
     ]);
 
-    setUploadsThisMonth(monthResult.count ?? 0);
+    setUploadsThisMonth(uploadsResult.count ?? 0);
     setTotalTables(totalResult.count ?? 0);
+    setChatQueriesThisMonth(chatResult.count ?? 0);
     setLoading(false);
   }, [user]);
 
@@ -70,18 +57,20 @@ export function useUsage() {
     fetchCounts();
   }, [fetchCounts]);
 
-  // Call this after a successful upload so counts stay in sync without refetch
+  // Call this after a successful upload so counts stay in sync without a full refetch
   const incrementUploadCount = useCallback(() => {
     setUploadsThisMonth((prev) => prev + 1);
     setTotalTables((prev) => prev + 1);
   }, []);
 
-  // Call this after each AI message is sent
-  const incrementChatCount = useCallback(() => {
-    const next = getChatCount() + 1;
-    setChatCount(next);
-    setChatQueriesThisMonth(next);
-  }, []);
+  // Inserts a row into chat_queries and bumps the local counter.
+  // The DB insert is what actually enforces the limit — the local state is just
+  // for instant UI feedback without waiting for the next fetchCounts call.
+  const incrementChatCount = useCallback(async () => {
+    if (!user) return;
+    await supabase.from('chat_queries').insert({ user_id: user.id });
+    setChatQueriesThisMonth((prev) => prev + 1);
+  }, [user]);
 
   // Derived convenience booleans
   const canUpload = uploadsThisMonth < LIMITS.UPLOADS_PER_MONTH;
