@@ -8,6 +8,8 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithGithub: () => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
   isSuperAdmin: boolean;
@@ -96,7 +98,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await new Promise((r) => setTimeout(r, 300));
         return fetchUserProfile(userId, attempt + 1);
       } else {
-        setUser(null);
+        // Still no row after retries — this is a new OAuth user (Google sign-in).
+        // They never go through signUp(), so there's no client-side INSERT.
+        // Create the profile row now using their session email.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          await supabase.from('users').insert({
+            id: userId,
+            email: session.user.email,
+            role: 'user',
+          });
+          // Fetch the freshly created row
+          const { data: created } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+          if (created) {
+            setUser(created);
+            supabase
+              .from('users')
+              .update({ last_active_at: new Date().toISOString() })
+              .eq('id', userId)
+              .then(() => {});
+          } else {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
       }
     } catch (err) {
       console.error('fetchUserProfile failed:', err);
@@ -119,11 +149,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/dashboard` },
+    });
+    if (error) throw error;
+  };
+
+  const signInWithGithub = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: `${window.location.origin}/dashboard` },
+    });
     if (error) throw error;
   };
 
@@ -145,6 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
+    signInWithGithub,
     signOut,
     updateUser,
     isSuperAdmin: user?.role === 'super_admin',
