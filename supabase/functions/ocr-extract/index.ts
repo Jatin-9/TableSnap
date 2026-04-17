@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import OpenAI from "npm:openai";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const openai = new OpenAI({
   apiKey: Deno.env.get("OPENAI_API_KEY"),
@@ -721,6 +722,18 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // Verify the caller is an authenticated user.
+  // "Verify JWT with legacy secret" is disabled in the dashboard because this
+  // project uses ES256 tokens — we handle verification here instead.
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return jsonResponse({ error: "Unauthorized" }, 401);
+  const { data: { user } } = await createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  ).auth.getUser();
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   try {
     const { imageBase64, mode = "fast" } = (await req.json()) as {

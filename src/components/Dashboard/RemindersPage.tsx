@@ -102,6 +102,7 @@ export default function RemindersPage() {
     const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-vocab-email`,
         {
@@ -109,7 +110,7 @@ export default function RemindersPage() {
           headers: {
             'Content-Type': 'application/json',
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${session?.access_token}`,
           },
           body: JSON.stringify({}),
           signal: controller.signal,

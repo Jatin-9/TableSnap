@@ -320,6 +320,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   // ─── Edge function call ───────────────────────────────────────────────────
 
   const callPipeline = async (imageBase64: string, mode: 'fast' | 'full') => {
+    const { data: { session } } = await supabase.auth.getSession();
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocr-extract`,
       {
@@ -327,6 +328,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         headers: {
           'Content-Type': 'application/json',
           apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({ imageBase64, mode }),
       }

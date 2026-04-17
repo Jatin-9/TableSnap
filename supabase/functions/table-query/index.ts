@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import OpenAI from "npm:openai";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 
 const openai = new OpenAI({
@@ -44,6 +45,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return jsonResponse({ error: "Unauthorized" }, 401);
+  const { data: { user } } = await createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  ).auth.getUser();
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   try {
     const { question, tables, history } = await req.json() as {
