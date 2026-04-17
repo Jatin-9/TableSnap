@@ -7,6 +7,8 @@ import {
   CheckSquare, Square, Clipboard, BookOpen, Share2, Search, FileText,
 } from 'lucide-react';
 import { TableCardSkeleton } from '../ui/Skeleton';
+import UpgradeModal from '../ui/UpgradeModal';
+import { useUsage, LIMITS } from '../../hooks/useUsage';
 
 // Wraps each match of `query` in a yellow highlight span.
 function highlight(text: string, query: string) {
@@ -62,6 +64,10 @@ export default function TablesPage() {
   const [mergeSaving, setMergeSaving] = useState(false);
 
   const filters = ['All', 'Languages', 'Expenses', 'General'];
+
+  // ── Usage / limits ────────────────────────────────────────────────────────
+  const { canUpload, canStore, uploadsThisMonth, uploadsRemaining, totalTables, tablesRemaining } = useUsage();
+  const [upgradeModal, setUpgradeModal] = useState<'uploads' | 'storage' | null>(null);
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -566,6 +572,34 @@ export default function TablesPage() {
         </p>
       </div>
 
+      {/* Usage warning banners */}
+      {!canUpload && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
+          <span className="text-red-600 dark:text-red-400 font-medium">Upload limit reached</span>
+          <span className="text-red-500 dark:text-red-400">{uploadsThisMonth} / {LIMITS.UPLOADS_PER_MONTH} used this month</span>
+          <button onClick={() => setUpgradeModal('uploads')} className="ml-auto text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-lg transition-colors">Upgrade</button>
+        </div>
+      )}
+      {canUpload && uploadsRemaining <= LIMITS.WARN_THRESHOLD && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
+          <span className="text-amber-700 dark:text-amber-400 font-medium">{uploadsRemaining} upload{uploadsRemaining !== 1 ? 's' : ''} remaining this month</span>
+          <button onClick={() => setUpgradeModal('uploads')} className="ml-auto text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">Upgrade for unlimited</button>
+        </div>
+      )}
+      {!canStore && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
+          <span className="text-red-600 dark:text-red-400 font-medium">Storage limit reached</span>
+          <span className="text-red-500 dark:text-red-400">{totalTables} / {LIMITS.TOTAL_TABLES} tables stored</span>
+          <button onClick={() => setUpgradeModal('storage')} className="ml-auto text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-lg transition-colors">Upgrade</button>
+        </div>
+      )}
+      {canStore && tablesRemaining <= LIMITS.WARN_THRESHOLD && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
+          <span className="text-amber-700 dark:text-amber-400 font-medium">{tablesRemaining} storage slot{tablesRemaining !== 1 ? 's' : ''} remaining</span>
+          <button onClick={() => setUpgradeModal('storage')} className="ml-auto text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">Upgrade for unlimited</button>
+        </div>
+      )}
+
       {/* Search bar */}
       <div className="flex items-center gap-2 mb-4">
         <div className="relative flex-1">
@@ -759,7 +793,11 @@ export default function TablesPage() {
       {/* Floating action button — upload */}
       {!selectMode && (
         <button
-          onClick={() => window.dispatchEvent(new Event('open-upload-modal'))}
+          onClick={() => {
+            if (!canUpload) { setUpgradeModal('uploads'); return; }
+            if (!canStore)  { setUpgradeModal('storage'); return; }
+            window.dispatchEvent(new Event('open-upload-modal'));
+          }}
           className="fixed bottom-6 right-6 z-30 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
           title="Upload Table"
         >
@@ -1164,6 +1202,16 @@ export default function TablesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Upgrade modal */}
+      {upgradeModal && (
+        <UpgradeModal
+          isOpen
+          onClose={() => setUpgradeModal(null)}
+          limitType={upgradeModal}
+          current={upgradeModal === 'uploads' ? uploadsThisMonth : totalTables}
+        />
       )}
     </div>
   );

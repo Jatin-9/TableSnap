@@ -5,6 +5,8 @@ import {
   Send, Loader2, Bot, User, AlertCircle, Trash2,
   Plus, MessageSquare, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { useUsage, LIMITS } from '../../hooks/useUsage';
+import UpgradeModal from '../ui/UpgradeModal';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,9 @@ export default function NLQPage() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try { return localStorage.getItem(SIDEBAR_PREF_KEY) !== 'false'; } catch { return true; }
   });
+
+  const { canChat, chatQueriesThisMonth, chatRemaining, incrementChatCount } = useUsage();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const [input, setInput] = useState('');
   const [isAsking, setIsAsking] = useState(false);
@@ -167,6 +172,12 @@ export default function NLQPage() {
     const question = input.trim();
     if (!question || isAsking) return;
 
+    // Block and show upgrade modal when the monthly chat limit is reached
+    if (!canChat) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
     setError('');
     setInput('');
 
@@ -207,6 +218,8 @@ export default function NLQPage() {
 
       const updatedConversation = [...fullConversation, aiMessage];
       setMessages((prev) => [...prev, aiMessage]);
+      // Tick up the monthly query counter in localStorage so the limit stays accurate
+      incrementChatCount();
       await saveSession(updatedConversation, userMessage, activeSessionId);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Something went wrong';
@@ -392,6 +405,25 @@ export default function NLQPage() {
           </div>
         )}
 
+        {/* Low-query warning — shows when ≤2 queries remain this month */}
+        {!canChat ? (
+          <div className="mx-6 mb-2 flex items-center justify-between gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl text-xs text-red-600 dark:text-red-400">
+            <span>You've used all {LIMITS.CHAT_QUERIES_PER_MONTH} AI queries for this month.</span>
+            <button
+              type="button"
+              onClick={() => setShowUpgradeModal(true)}
+              className="font-semibold underline whitespace-nowrap"
+            >
+              Upgrade
+            </button>
+          </div>
+        ) : chatRemaining <= LIMITS.WARN_THRESHOLD ? (
+          <div className="mx-6 mb-2 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl text-xs text-amber-700 dark:text-amber-300">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>{chatRemaining} AI {chatRemaining === 1 ? 'query' : 'queries'} left this month.</span>
+          </div>
+        ) : null}
+
         {/* Input bar — single-line, compact */}
         <div className="px-6 py-4 border-t border-gray-100 dark:border-zinc-800/60">
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/80 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
@@ -400,13 +432,13 @@ export default function NLQPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your tables..."
-              disabled={tablesLoading}
+              placeholder={canChat ? "Ask about your tables..." : "Upgrade to send more queries"}
+              disabled={tablesLoading || !canChat}
               className="flex-1 text-sm text-gray-900 dark:text-white bg-transparent placeholder-gray-400 dark:placeholder-gray-500 outline-none disabled:opacity-50"
             />
             <button
               onClick={sendQuestion}
-              disabled={!input.trim() || isAsking || tablesLoading}
+              disabled={!input.trim() || isAsking || tablesLoading || !canChat}
               className="w-8 h-8 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg flex items-center justify-center transition-colors flex-shrink-0"
             >
               {isAsking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
@@ -414,6 +446,14 @@ export default function NLQPage() {
           </div>
         </div>
       </div>
+
+      {/* Upgrade modal — shown when chat limit is hit */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        limitType="chat"
+        current={chatQueriesThisMonth}
+      />
     </div>
   );
 }

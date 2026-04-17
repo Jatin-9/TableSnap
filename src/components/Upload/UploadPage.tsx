@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Upload, Image as ImageIcon, Loader2, X, CheckCircle, AlertCircle, Trash2, FileText } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useUsage } from '../../hooks/useUsage';
+import UpgradeModal from '../ui/UpgradeModal';
 // Vite resolves this to the worker file URL at build time.
 // Importing it statically as a URL string means pdfjs can load the worker
 // without any runtime bundler tricks — the PDF JS is still loaded lazily below.
@@ -77,6 +79,9 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   const [batchInfo, setBatchInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { user } = useAuth();
+  const { canUpload, canStore, uploadsThisMonth, totalTables, incrementUploadCount, refetch } = useUsage();
+  // Which limit the upgrade modal should explain: 'uploads' or 'storage', or null when hidden
+  const [upgradeModal, setUpgradeModal] = useState<'uploads' | 'storage' | null>(null);
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -502,6 +507,10 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
   const saveAll = async () => {
     if (!user) return;
 
+    // Check limits before doing any work — show the upgrade modal and stop early
+    if (!canUpload) { setUpgradeModal('uploads'); return; }
+    if (!canStore)  { setUpgradeModal('storage'); return; }
+
     const readyItems = imageQueue.filter(
       (item) => item.status === 'done' && item.data && item.data.tableData.length > 0
     );
@@ -511,16 +520,28 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     let savedCount = 0;
 
     for (const item of readyItems) {
+      // Re-check the storage limit for each table — the user may have queued
+      // more tables than their remaining capacity allows
+      if (!canStore) { setUpgradeModal('storage'); break; }
+      if (!canUpload) { setUpgradeModal('uploads'); break; }
+
       const success = await saveSingleTable(item.data!);
-      if (success) savedCount++;
+      if (success) {
+        savedCount++;
+        // Keep the local usage counters in sync without waiting for a refetch
+        incrementUploadCount();
+      }
     }
 
     setIsProcessing(false);
 
     if (savedCount > 0) {
+      // Sync the real counts from the DB so the warning banners are accurate
+      await refetch();
       resetAll();
       onSaved?.();
-    } else {
+    } else if (upgradeModal === null) {
+      // Only show the generic failure alert if we didn't already show a limit modal
       alert('Failed to save tables. Please try again.');
     }
   };
@@ -870,6 +891,20 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           </div>
         )}
       </div>
+
+      {/* Upgrade modals — shown when a save hits the monthly upload or storage cap */}
+      <UpgradeModal
+        isOpen={upgradeModal === 'uploads'}
+        onClose={() => setUpgradeModal(null)}
+        limitType="uploads"
+        current={uploadsThisMonth}
+      />
+      <UpgradeModal
+        isOpen={upgradeModal === 'storage'}
+        onClose={() => setUpgradeModal(null)}
+        limitType="storage"
+        current={totalTables}
+      />
     </div>
   );
 }
