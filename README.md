@@ -96,6 +96,8 @@ supabase/migrations/20260417000004_add_last_active_at.sql
 supabase/migrations/20260417000005_active_users_on_login_trigger.sql
 supabase/migrations/20260417000006_auto_create_user_profile.sql
 supabase/migrations/20260417000007_drop_auth_trigger.sql
+supabase/migrations/20260417000008_prevent_role_self_promotion.sql
+supabase/migrations/20260417000009_revoke_promote_demote.sql
 ```
 
 ### 5. Deploy the edge functions
@@ -115,6 +117,15 @@ Each function needs your OpenAI key set as a secret:
 ```bash
 supabase secrets set OPENAI_API_KEY=sk-...
 ```
+
+The email reminder function also needs a Resend key and a cron secret:
+
+```bash
+supabase secrets set RESEND_API_KEY=re_...
+supabase secrets set CRON_SECRET=$(openssl rand -hex 32)
+```
+
+Copy the `CRON_SECRET` value and paste it into `supabase/migrations/20260413000002_schedule_vocab_emails.sql` where it says `YOUR_CRON_SECRET`, then run that migration in the SQL Editor.
 
 ### 6. Start the dev server
 

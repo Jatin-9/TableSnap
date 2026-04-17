@@ -12,6 +12,18 @@ type WordEntry = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Escapes the 5 characters that have special meaning in HTML so that user
+// data (table titles, column names, cell values) can never inject tags or
+// break attribute values when embedded directly into the email HTML string.
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")   // must be first — otherwise we'd double-escape
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Randomly shuffle an array and return the first n items.
 // Used to pick 5 different words each time.
 function pickRandom<T>(arr: T[], n: number): T[] {
@@ -73,8 +85,8 @@ function buildWordCard(
       return `
         <tr>
           <td style="padding:10px 0;${borderStyle}">
-            <span style="display:block;font-size:10px;color:#9ca3af;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">${col}</span>
-            <span style="${valueStyle}">${entry.row[col]}</span>
+            <span style="display:block;font-size:10px;color:#9ca3af;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(col)}</span>
+            <span style="${valueStyle}">${escapeHtml(entry.row[col])}</span>
           </td>
         </tr>`;
     })
@@ -90,7 +102,7 @@ function buildWordCard(
             Word ${index + 1}
           </span>
           <span style="font-size:11px;color:#9ca3af;margin-left:8px;">
-            · ${entry.tableTitle}${entry.languageName ? ` · ${entry.languageName}` : ""}
+            · ${escapeHtml(entry.tableTitle)}${entry.languageName ? ` · ${escapeHtml(entry.languageName)}` : ""}
           </span>
         </td>
       </tr>
@@ -120,9 +132,12 @@ function buildEmailHtml(
 
   const frequencyLabel = frequency === "daily" ? "Daily" : "Weekly";
 
-  // Get unique language names to show in the header subtitle
+  // Get unique language names to show in the header subtitle.
+  // Each individual name is escaped; the joined string is safe to embed in HTML.
   const languages = [...new Set(words.map((w) => w.languageName).filter(Boolean))];
-  const langLabel = languages.length > 0 ? languages.join(" & ") : "Vocabulary";
+  const langLabel = languages.length > 0
+    ? languages.map(escapeHtml).join(" &amp; ")
+    : "Vocabulary";
 
   const wordCards = words.map((w, i) => buildWordCard(i, w)).join("");
 
@@ -253,7 +268,7 @@ function buildEmailHtml(
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
 Deno.serve(async (req) => {
@@ -261,17 +276,37 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-  }
-  const { data: { user } } = await createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  ).auth.getUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  // Two valid callers:
+  //   1. The pg_cron job — sends `x-cron-secret: <secret>` in the header.
+  //      This secret must be set via: supabase secrets set CRON_SECRET=<value>
+  //   2. A logged-in user clicking "Send test email" — sends a valid user JWT
+  //      in the Authorization header. We verify it with getUser().
+  //
+  // Neither path accepts anonymous requests.
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const incomingCronSecret = req.headers.get("x-cron-secret");
+
+  // Path 1: cron job authentication — constant-time comparison prevents
+  // timing-attack enumeration of the secret value.
+  const isCronCall = cronSecret &&
+    incomingCronSecret &&
+    incomingCronSecret.length === cronSecret.length &&
+    incomingCronSecret.split("").every((c, i) => c === cronSecret[i]);
+
+  if (!isCronCall) {
+    // Path 2: user JWT — fall back to verifying the bearer token.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
+    const { data: { user } } = await createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    ).auth.getUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
   }
 
   // Use service role client so we can read any user's data (bypasses RLS)
