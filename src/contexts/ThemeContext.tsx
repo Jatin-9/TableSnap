@@ -12,65 +12,55 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// Read the initial theme synchronously from localStorage so the value is
+// available on the first render — the inline script in index.html already
+// applied the class to <html>, so this just keeps React in sync with it.
+function getInitialTheme(): Theme {
+  try {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [theme, setTheme] = useState<Theme | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Start with the localStorage value immediately — no flash, no null state
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
+  // Once the user is known, check if they have a saved preference in the DB
+  // and upgrade to it if it differs from the local value.
   useEffect(() => {
-    const fetchTheme = async () => {
-      if (user) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('themeCheck')
-          .eq('id', user.id)
-          .single();
+    if (!user) return;
 
+    supabase
+      .from('users')
+      .select('themeCheck')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
         if (data?.themeCheck === 'dark' || data?.themeCheck === 'light') {
-          setTheme(data.themeCheck);
-          setLoading(false);
-          return;
+          setThemeState(data.themeCheck);
         }
+      });
+  }, [user?.id]);
 
-        if (error) {
-          console.error('Error fetching theme from database:', error);
-        }
-      }
-
-      const savedTheme = localStorage.getItem('theme') as Theme | null;
-
-      if (savedTheme === 'dark' || savedTheme === 'light') {
-        setTheme(savedTheme);
-        setLoading(false);
-        return;
-      }
-
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setTheme(prefersDark ? 'dark' : 'light');
-      setLoading(false);
-    };
-
-    fetchTheme();
-  }, [user]);
-
+  // Keep the <html> class and localStorage in sync whenever theme changes
   useEffect(() => {
-    if (!theme) return;
-
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
   }, [theme]);
 
   const value = useMemo(
     () => ({
-      theme: theme ?? 'light',
-      toggleTheme: () =>
-        setTheme((prev) => (prev === 'light' ? 'dark' : 'light')),
-      setTheme,
+      theme,
+      toggleTheme: () => setThemeState((prev) => (prev === 'light' ? 'dark' : 'light')),
+      setTheme: setThemeState,
     }),
     [theme]
   );
-
-  if (loading) return null;
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

@@ -30,10 +30,10 @@ export default function HeroSection() {
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
-          {/* Badge */}
+          {/* Badge — hidden while auth resolves to avoid flashing the wrong text */}
           <span className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium rounded-full bg-blue-600/10 border border-blue-600/20 text-blue-500">
             <Sparkles className="w-4 h-4 mr-2" />
-            {isLoggedIn ? `Welcome back, ${user!.email?.split('@')[0]}` : 'Powered by AI OCR'}
+            {loading ? '\u00A0' : isLoggedIn ? `Welcome back, ${user!.email?.split('@')[0]}` : 'Powered by AI OCR'}
           </span>
 
           {/* Headline */}
@@ -49,9 +49,9 @@ export default function HeroSection() {
             AI extracts it instantly. Then chat with it, study it, export it.
           </p>
 
-          {/* CTAs */}
+          {/* CTAs — hidden while auth resolves to avoid flashing the wrong button */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            {isLoggedIn ? (
+            {!loading && (isLoggedIn ? (
               <Link
                 to="/dashboard"
                 className="inline-flex items-center text-base px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 transition-all"
@@ -67,7 +67,7 @@ export default function HeroSection() {
                 Get Started Free
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Link>
-            )}
+            ))}
             <a
               href="#how-it-works"
               className="inline-flex items-center text-base px-8 py-4 rounded-xl border border-blue-600/30 bg-blue-600/5 hover:bg-blue-600/15 hover:border-blue-600/50 text-gray-900 dark:text-white font-semibold transition-all"

@@ -118,7 +118,6 @@ export default function RemindersPage() {
 
       clearTimeout(timeoutId);
       const body = await response.json().catch(() => ({}));
-      // Show what the function actually returned so we can debug
       setTestDetail(JSON.stringify(body, null, 2));
       setTestResult(response.ok ? 'success' : 'error');
     } catch (err) {

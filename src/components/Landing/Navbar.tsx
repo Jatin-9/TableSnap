@@ -49,7 +49,8 @@ export default function Navbar() {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            {isLoggedIn ? (
+            {/* Render nothing until auth resolves to avoid flashing logged-out buttons */}
+            {!loading && (isLoggedIn ? (
               <Link
                 to="/dashboard"
                 className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
@@ -71,7 +72,7 @@ export default function Navbar() {
                   Get Started
                 </Link>
               </>
-            )}
+            ))}
           </div>
 
           {/* Mobile menu button */}
@@ -109,7 +110,7 @@ export default function Navbar() {
               </a>
             ))}
             <div className="pt-3 flex flex-col gap-2">
-              {isLoggedIn ? (
+              {!loading && (isLoggedIn ? (
                 <Link
                   to="/dashboard"
                   onClick={() => setIsOpen(false)}
@@ -132,7 +133,7 @@ export default function Navbar() {
                     Get Started
                   </Link>
                 </>
-              )}
+              ))}
             </div>
           </div>
         </div>
