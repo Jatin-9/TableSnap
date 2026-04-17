@@ -48,32 +48,37 @@ export default function DashboardLayout() {
     <div className="flex h-screen bg-gray-50 text-gray-900 dark:bg-zinc-950 dark:text-gray-100">
       <Sidebar />
 
-      {/* Top-right: theme toggle + sign out icon buttons */}
-      <div className="fixed top-4 right-5 z-20 flex items-center gap-1.5">
-        <button
-          onClick={handleThemeToggle}
-          disabled={savingTheme}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
-        >
-          {savingTheme ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : theme === 'dark' ? (
-            <Sun className="w-4 h-4" />
-          ) : (
-            <Moon className="w-4 h-4" />
-          )}
-        </button>
-        <button
-          onClick={signOut}
-          title="Sign out"
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Main content — relative so the icons are positioned inside it and
+          scroll away naturally when the user scrolls down */}
+      <main className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-950 relative">
 
-      <main className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-950">
+        {/* Theme toggle + sign out — absolute so they sit at the top-right of
+            the content area without affecting page layout. They scroll away as
+            the user scrolls down; scroll back to the top to reach them. */}
+        <div className="absolute top-4 right-5 z-20 flex items-center gap-1.5">
+          <button
+            onClick={handleThemeToggle}
+            disabled={savingTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+          >
+            {savingTheme ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : theme === 'dark' ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            onClick={signOut}
+            title="Sign out"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+
         <Outlet />
       </main>
 

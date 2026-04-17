@@ -23,31 +23,40 @@ export function useUsage() {
   const fetchCounts = useCallback(async () => {
     if (!user) return;
 
-    // First day of the current month in ISO format
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    // YYYY-MM-01 — matches the `date` column type in user_analytics
+    const monthStartDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    // Full ISO timestamp for tables that use timestamptz columns
+    const monthStartISO = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     const [uploadsResult, totalResult, chatResult] = await Promise.all([
-      // Uploads this month
+      // Upload count comes from user_analytics, not table_snapshots.
+      // user_analytics.tables_created is incremented by a DB trigger on INSERT
+      // and is never decremented — so deleting a table doesn't reduce the count.
       supabase
-        .from('table_snapshots')
-        .select('id', { count: 'exact', head: true })
+        .from('user_analytics')
+        .select('tables_created')
         .eq('user_id', user.id)
-        .gte('created_at', monthStart),
-      // Total tables stored
+        .gte('date', monthStartDate),
+      // Total tables currently stored (this one correctly goes down on delete)
       supabase
         .from('table_snapshots')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id),
-      // AI queries sent this month — tracked server-side so it can't be spoofed
+      // AI queries this month — tracked server-side so it can't be spoofed
       supabase
         .from('chat_queries')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .gte('created_at', monthStart),
+        .gte('created_at', monthStartISO),
     ]);
 
-    setUploadsThisMonth(uploadsResult.count ?? 0);
+    // Sum up tables_created across all days in the current month
+    const uploadCount = (uploadsResult.data ?? []).reduce(
+      (sum, row) => sum + (row.tables_created || 0),
+      0
+    );
+    setUploadsThisMonth(uploadCount);
     setTotalTables(totalResult.count ?? 0);
     setChatQueriesThisMonth(chatResult.count ?? 0);
     setLoading(false);

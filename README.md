@@ -90,6 +90,12 @@ supabase/migrations/20260416000001_add_saved_queries.sql
 supabase/migrations/20260416000002_add_updated_at_to_snapshots.sql
 supabase/migrations/20260416000003_add_chat_sessions.sql
 supabase/migrations/20260417000001_add_chat_queries.sql
+supabase/migrations/20260417000002_add_superadmin_read_policies.sql
+supabase/migrations/20260417000003_fix_superadmin_policies.sql
+supabase/migrations/20260417000004_add_last_active_at.sql
+supabase/migrations/20260417000005_active_users_on_login_trigger.sql
+supabase/migrations/20260417000006_auto_create_user_profile.sql
+supabase/migrations/20260417000007_drop_auth_trigger.sql
 ```
 
 ### 5. Deploy the edge functions

@@ -275,11 +275,9 @@ export default function AnalyticsPage() {
     return (
       <div className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="animate-pulse h-8 w-40 bg-gray-200 dark:bg-zinc-700 rounded-lg mb-2" />
-            <div className="animate-pulse h-4 w-56 bg-gray-200 dark:bg-zinc-700 rounded-lg" />
-          </div>
+        <div className="mb-6">
+          <div className="animate-pulse h-8 w-40 bg-gray-200 dark:bg-zinc-700 rounded-lg mb-2" />
+          <div className="animate-pulse h-4 w-56 bg-gray-200 dark:bg-zinc-700 rounded-lg mb-4" />
           <div className="animate-pulse h-10 w-36 bg-gray-200 dark:bg-zinc-700 rounded-lg" />
         </div>
 
@@ -311,16 +309,13 @@ export default function AnalyticsPage() {
     <div ref={analyticsRef} className="p-6 bg-gray-50 dark:bg-zinc-950 min-h-screen">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 dark:text-white">My Analytics</h1>
-          <p className="text-gray-600 dark:text-blue-500">Track your personal usage and progress</p>
-        </div>
-
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-1 dark:text-white">My Analytics</h1>
+        <p className="text-gray-600 dark:text-blue-500 mb-4">Track your personal usage and progress</p>
         <button
           onClick={saveAsImage}
           disabled={savingImage}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 mt-10"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
         >
           <Camera className="w-5 h-5" />
           {savingImage ? 'Saving...' : 'Save as Image'}

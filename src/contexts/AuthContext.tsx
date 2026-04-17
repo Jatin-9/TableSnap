@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, attempt = 0) => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -79,9 +79,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data) {
         setUser(data);
+        // Fire-and-forget — stamp the user as active now without blocking the login flow.
+        // .then() is required: Supabase's query builder is lazy and only executes when
+        // you await or chain .then() — calling .update().eq() alone does nothing.
+        supabase
+          .from('users')
+          .update({ last_active_at: new Date().toISOString() })
+          .eq('id', userId)
+          .then(() => {});
       } else if (error) {
         console.error('Error fetching user profile:', error);
         setUser(null);
+      } else if (attempt < 5) {
+        // Row not found yet — onAuthStateChange raced ahead of the users INSERT
+        // on signup. Retry up to 5 times (max ~1.5s wait) before giving up.
+        await new Promise((r) => setTimeout(r, 300));
+        return fetchUserProfile(userId, attempt + 1);
       } else {
         setUser(null);
       }
@@ -92,13 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
-
+    // Insert the public users row immediately after auth signup.
+    // fetchUserProfile retries if onAuthStateChange races ahead of this insert.
     if (data.user) {
       await supabase.from('users').insert({
         id: data.user.id,

@@ -15,6 +15,7 @@ export interface User {
   role: 'user' | 'super_admin';
   created_at: string;
   preferences: Record<string, unknown>;
+  last_active_at: string | null;
 }
 
 export type TableSnapshot = {
