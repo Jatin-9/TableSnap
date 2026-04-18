@@ -98,6 +98,7 @@ supabase/migrations/20260417000006_auto_create_user_profile.sql
 supabase/migrations/20260417000007_drop_auth_trigger.sql
 supabase/migrations/20260417000008_prevent_role_self_promotion.sql
 supabase/migrations/20260417000009_revoke_promote_demote.sql
+supabase/migrations/20260417000010_fix_insert_role_check.sql
 ```
 
 ### 5. Deploy the edge functions
