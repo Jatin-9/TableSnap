@@ -53,7 +53,7 @@ export default function StatsSection() {
   return (
     <section className="py-16 px-4 sm:px-6 lg:px-8 border-y border-gray-200/50 dark:border-gray-800/50">
       <div className="max-w-4xl mx-auto">
-        <div className="grid grid-cols-3 gap-8">
+        <div className="grid grid-cols-3 gap-4 sm:gap-8">
           {stats.map((stat) => (
             <div key={stat.label} className="text-center">
               <AnimatedCounter value={stat.value} suffix={stat.suffix} />

@@ -43,8 +43,11 @@ export default function NLQPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
 
-  // Sidebar defaults to open so users see their history right away
+  // On mobile (< 768px) default the history sidebar to closed so the full
+  // screen is used for the chat. On desktop, honour the saved preference.
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) return false;
     try { return localStorage.getItem(SIDEBAR_PREF_KEY) !== 'false'; } catch { return true; }
   });
 
@@ -353,7 +356,7 @@ export default function NLQPage() {
         )}
 
         {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 min-h-0">
           {messages.map((msg, idx) => (
             <div
               key={idx}

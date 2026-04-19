@@ -609,7 +609,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
         {/* Header */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 dark:text-white">
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 dark:text-white">
               Upload Table Images
             </h1>
             <p className="text-gray-600 dark:text-gray-300">

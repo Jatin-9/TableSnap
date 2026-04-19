@@ -296,7 +296,7 @@ export default function SuperAdminPage() {
       </div>
 
       {/* ── Stat cards ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-blue-100">Total Users</span>

@@ -575,27 +575,27 @@ export default function TablesPage() {
 
       {/* Usage warning banners */}
       {!canUpload && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
           <span className="text-red-600 dark:text-red-400 font-medium">Upload limit reached</span>
           <span className="text-red-500 dark:text-red-400">{uploadsThisMonth} / {LIMITS.UPLOADS_PER_MONTH} used this month</span>
           <button onClick={() => setUpgradeModal('uploads')} className="ml-auto text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-lg transition-colors">Upgrade</button>
         </div>
       )}
       {canUpload && uploadsRemaining <= LIMITS.WARN_THRESHOLD && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
           <span className="text-amber-700 dark:text-amber-400 font-medium">{uploadsRemaining} upload{uploadsRemaining !== 1 ? 's' : ''} remaining this month</span>
           <button onClick={() => setUpgradeModal('uploads')} className="ml-auto text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">Upgrade for unlimited</button>
         </div>
       )}
       {!canStore && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-sm">
           <span className="text-red-600 dark:text-red-400 font-medium">Storage limit reached</span>
           <span className="text-red-500 dark:text-red-400">{totalTables} / {LIMITS.TOTAL_TABLES} tables stored</span>
           <button onClick={() => setUpgradeModal('storage')} className="ml-auto text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-lg transition-colors">Upgrade</button>
         </div>
       )}
       {canStore && tablesRemaining <= LIMITS.WARN_THRESHOLD && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-sm">
           <span className="text-amber-700 dark:text-amber-400 font-medium">{tablesRemaining} storage slot{tablesRemaining !== 1 ? 's' : ''} remaining</span>
           <button onClick={() => setUpgradeModal('storage')} className="ml-auto text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">Upgrade for unlimited</button>
         </div>
@@ -1045,7 +1045,7 @@ export default function TablesPage() {
           onClick={closeEditModal}
         >
           <div
-            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-zinc-900 p-8 border border-gray-200 dark:border-zinc-800/50"
+            className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-zinc-900 p-4 sm:p-8 border border-gray-200 dark:border-zinc-800/50"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-6 flex items-center justify-between">

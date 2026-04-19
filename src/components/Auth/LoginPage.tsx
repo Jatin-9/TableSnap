@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Table2, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { Table2, Mail, Lock, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 
 
 export default function LoginPage() {
@@ -13,6 +14,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
+
+  // Forgot-password inline view
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
   const { signIn, signUp, signInWithGoogle, signInWithGithub, supabaseUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -37,6 +46,25 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotLoading(true);
+    try {
+      // Supabase sends a one-time reset link. The link points to /reset-password
+      // where the SDK exchanges the token for a short-lived recovery session.
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setForgotSent(true);
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : 'Failed to send reset email.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -67,6 +95,66 @@ export default function LoginPage() {
               {isSignUp ? 'Create your account' : 'Welcome back'}
             </p>
           </div>
+
+          {/* ── Forgot-password inline view ─────────────────────────── */}
+          {forgotMode && (
+            <div>
+              <button
+                type="button"
+                onClick={() => { setForgotMode(false); setForgotSent(false); setForgotError(''); }}
+                className="mb-6 text-sm text-blue-500 hover:text-blue-400 transition-colors"
+              >
+                ← Back to sign in
+              </button>
+
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Reset your password</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Enter your email and we'll send a reset link.
+              </p>
+
+              {forgotSent ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <CheckCircle className="w-10 h-10 text-green-500" />
+                  <p className="text-sm text-gray-700 dark:text-gray-200 text-center font-medium">
+                    Email sent! Check your inbox for the reset link.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  {forgotError && (
+                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl text-red-700 dark:text-red-400 text-sm">
+                      {forgotError}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                  >
+                    {forgotLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+                    ) : (
+                      <>Send reset email <ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* ── Normal sign-in / sign-up view ───────────────────────── */}
+          {!forgotMode && <>
 
           {/* Sign In / Sign Up tab switcher */}
           <div className="flex mb-6 p-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl">
@@ -122,9 +210,13 @@ export default function LoginPage() {
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                 {!isSignUp && (
-                  <span className="text-xs text-blue-500 hover:text-blue-400 cursor-pointer transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setForgotEmail(email); setForgotError(''); setForgotSent(false); }}
+                    className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                  >
                     Forgot password?
-                  </span>
+                  </button>
                 )}
               </div>
               <div className="relative">
@@ -225,6 +317,8 @@ export default function LoginPage() {
               GitHub
             </button>
           </div>
+
+          </> /* end !forgotMode */ }
         </div>
 
         {/* Back to home */}

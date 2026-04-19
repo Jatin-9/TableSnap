@@ -12,6 +12,7 @@ import NLQPage from './components/Dashboard/NLQPage';
 import StudyPage from './components/Dashboard/StudyPage';
 import SuperAdminPage from './components/SuperAdmin/SuperAdminPage';
 import SharedTablePage from './components/Share/SharedTablePage';
+import ResetPasswordPage from './components/Auth/ResetPasswordPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
@@ -55,6 +56,9 @@ function App() {
 
             {/* Public share route — no login required */}
             <Route path="/share/:id" element={<SharedTablePage />} />
+
+            {/* Password reset — user arrives here via the email link */}
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route path="/" element={<LandingPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
