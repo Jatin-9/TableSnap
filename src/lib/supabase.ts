@@ -13,6 +13,7 @@ export interface User {
   id: string;
   email: string;
   role: 'user' | 'super_admin';
+  tier: 'free' | 'pro';
   created_at: string;
   preferences: Record<string, unknown>;
   last_active_at: string | null;

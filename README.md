@@ -23,9 +23,9 @@ TableSnap is an AI-powered web app that extracts structured tables from photos a
 
 | | Free | Pro ($8/month) |
 |---|---|---|
-| Uploads / month | 10 | 100 |
+| Uploads / month | 10 | 200 |
 | Tables stored | 25 | 500 |
-| AI chat queries / month | 20 | 200 |
+| AI chat queries / month | 30 | 300 |
 | PDF support | ✓ | ✓ |
 | All other features | ✓ | ✓ |
 

@@ -6,9 +6,17 @@ import { supabase } from '../lib/supabase';
 export const LIMITS = {
   UPLOADS_PER_MONTH: 10,
   TOTAL_TABLES: 25,
-  CHAT_QUERIES_PER_MONTH: 20,
+  CHAT_QUERIES_PER_MONTH: 30,
   // Warning banners appear when remaining slots hit this number
   WARN_THRESHOLD: 2,
+};
+
+// ── Pro tier limits ────────────────────────────────────────────────────────────
+export const PRO_LIMITS = {
+  UPLOADS_PER_MONTH: 200,
+  TOTAL_TABLES: 500,
+  CHAT_QUERIES_PER_MONTH: 300,
+  WARN_THRESHOLD: 10,
 };
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
@@ -18,6 +26,7 @@ export function useUsage() {
   const [uploadsThisMonth, setUploadsThisMonth] = useState(0);
   const [totalTables, setTotalTables] = useState(0);
   const [chatQueriesThisMonth, setChatQueriesThisMonth] = useState(0);
+  const [tier, setTier] = useState<'free' | 'pro'>('free');
   const [loading, setLoading] = useState(true);
 
   const fetchCounts = useCallback(async () => {
@@ -29,7 +38,7 @@ export function useUsage() {
     // Full ISO timestamp for tables that use timestamptz columns
     const monthStartISO = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const [uploadsResult, totalResult, chatResult] = await Promise.all([
+    const [uploadsResult, totalResult, chatResult, tierResult] = await Promise.all([
       // Upload count comes from user_analytics, not table_snapshots.
       // user_analytics.tables_created is incremented by a DB trigger on INSERT
       // and is never decremented — so deleting a table doesn't reduce the count.
@@ -49,6 +58,12 @@ export function useUsage() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .gte('created_at', monthStartISO),
+      // Fetch the user's tier so we know which limit set to apply
+      supabase
+        .from('users')
+        .select('tier')
+        .eq('id', user.id)
+        .single(),
     ]);
 
     // Sum up tables_created across all days in the current month
@@ -59,6 +74,7 @@ export function useUsage() {
     setUploadsThisMonth(uploadCount);
     setTotalTables(totalResult.count ?? 0);
     setChatQueriesThisMonth(chatResult.count ?? 0);
+    if (tierResult.data?.tier) setTier(tierResult.data.tier as 'free' | 'pro');
     setLoading(false);
   }, [user]);
 
@@ -81,17 +97,23 @@ export function useUsage() {
     setChatQueriesThisMonth((prev) => prev + 1);
   }, [user]);
 
-  // Derived convenience booleans
-  const canUpload = uploadsThisMonth < LIMITS.UPLOADS_PER_MONTH;
-  const canStore  = totalTables < LIMITS.TOTAL_TABLES;
-  const canChat   = chatQueriesThisMonth < LIMITS.CHAT_QUERIES_PER_MONTH;
+  // Apply the right limit set based on the user's tier
+  const isPro = tier === 'pro';
+  const activeLimits = isPro ? PRO_LIMITS : LIMITS;
 
-  const uploadsRemaining = LIMITS.UPLOADS_PER_MONTH - uploadsThisMonth;
-  const tablesRemaining  = LIMITS.TOTAL_TABLES - totalTables;
-  const chatRemaining    = LIMITS.CHAT_QUERIES_PER_MONTH - chatQueriesThisMonth;
+  // Derived convenience booleans
+  const canUpload = uploadsThisMonth < activeLimits.UPLOADS_PER_MONTH;
+  const canStore  = totalTables < activeLimits.TOTAL_TABLES;
+  const canChat   = chatQueriesThisMonth < activeLimits.CHAT_QUERIES_PER_MONTH;
+
+  const uploadsRemaining = activeLimits.UPLOADS_PER_MONTH - uploadsThisMonth;
+  const tablesRemaining  = activeLimits.TOTAL_TABLES - totalTables;
+  const chatRemaining    = activeLimits.CHAT_QUERIES_PER_MONTH - chatQueriesThisMonth;
 
   return {
     loading,
+    isPro,
+    tier,
     uploadsThisMonth,
     totalTables,
     chatQueriesThisMonth,

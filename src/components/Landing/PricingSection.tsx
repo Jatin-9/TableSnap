@@ -10,7 +10,7 @@ const plans = [
     features: [
       '10 uploads / month',
       '25 tables stored',
-      '20 AI chat queries / month',
+      '30 AI chat queries / month',
       'PDF support',
       'Language enrichment',
       'Flashcard & study mode',
@@ -28,9 +28,9 @@ const plans = [
     period: '/month',
     description: 'For power users who go all-in',
     features: [
-      '100 uploads / month',
+      '200 uploads / month',
       '500 tables stored',
-      '200 AI chat queries / month',
+      '300 AI chat queries / month',
       'PDF support',
       'Priority AI processing',
       'Priority support',
