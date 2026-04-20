@@ -1,13 +1,27 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUsage, LIMITS, PRO_LIMITS } from '../../hooks/useUsage';
 import { supabase } from '../../lib/supabase';
-import { Settings as SettingsIcon, User, Shield, Save } from 'lucide-react';
+import {
+  Settings as SettingsIcon,
+  User,
+  Shield,
+  Save,
+  Sparkles,
+  Zap,
+  Loader2,
+  ExternalLink,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
+  const { isPro, uploadsThisMonth, totalTables, chatQueriesThisMonth } = useUsage();
+
   const [preferences, setPreferences] = useState(user?.preferences || {});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -17,14 +31,63 @@ export default function SettingsPage() {
       .eq('id', user!.id);
 
     if (!error) {
-      // Push the new preferences into the shared AuthContext so every
-      // component reading user.preferences (e.g. TablesPage) updates instantly.
       updateUser({ preferences });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     }
     setSaving(false);
   };
+
+  // Kicks off a Lemon Squeezy hosted checkout — same flow as the UpgradeModal
+  const handleUpgrade = async () => {
+    setCheckoutLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        toast.error('Could not start checkout. Please try again.');
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      toast.error('Could not start checkout. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Usage bar helper — shows a coloured progress bar with label
+  function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
+    const pct = Math.min((used / limit) * 100, 100);
+    const near = pct >= 80;
+    return (
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span className="text-gray-500 dark:text-gray-400">{label}</span>
+          <span className={`font-semibold ${near ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}>
+            {used} / {limit}
+          </span>
+        </div>
+        <div className="h-1.5 bg-gray-100 dark:bg-zinc-700 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${near ? 'bg-red-500' : 'bg-blue-500'}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -34,6 +97,99 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 max-w-4xl">
+
+        {/* ── Plan & Billing ────────────────────────────────────────────────── */}
+        <div className="dashboard-card overflow-hidden">
+          {/* Card header — gradient for Pro, plain for Free */}
+          <div className={`p-6 ${isPro
+            ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+            : 'border-b border-gray-100 dark:border-zinc-800'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  isPro ? 'bg-white/20' : 'bg-amber-100 dark:bg-amber-900/30'
+                }`}>
+                  {isPro
+                    ? <Sparkles className="w-5 h-5 text-white" />
+                    : <Zap className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  }
+                </div>
+                <div>
+                  <h2 className={`text-xl font-bold ${isPro ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+                    {isPro ? 'Pro Plan' : 'Free Plan'}
+                  </h2>
+                  <p className={`text-sm ${isPro ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {isPro ? '$8 / month · Billed via Lemon Squeezy' : 'Upgrade to unlock higher limits'}
+                  </p>
+                </div>
+              </div>
+
+              {isPro && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white ring-1 ring-white/30">
+                  <Sparkles className="w-3 h-3" />
+                  PRO
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Usage bars */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                This month's usage
+              </p>
+              <UsageBar
+                label="Uploads"
+                used={uploadsThisMonth}
+                limit={isPro ? PRO_LIMITS.UPLOADS_PER_MONTH : LIMITS.UPLOADS_PER_MONTH}
+              />
+              <UsageBar
+                label="Tables stored"
+                used={totalTables}
+                limit={isPro ? PRO_LIMITS.TOTAL_TABLES : LIMITS.TOTAL_TABLES}
+              />
+              <UsageBar
+                label="AI queries"
+                used={chatQueriesThisMonth}
+                limit={isPro ? PRO_LIMITS.CHAT_QUERIES_PER_MONTH : LIMITS.CHAT_QUERIES_PER_MONTH}
+              />
+            </div>
+
+            {/* CTA */}
+            {isPro ? (
+              // Pro users — link to Lemon Squeezy customer portal to manage/cancel
+              <a
+                href="https://app.lemonsqueezy.com/my-orders"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Manage subscription
+              </a>
+            ) : (
+              // Free users — upgrade button
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleUpgrade}
+                  disabled={checkoutLoading}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold text-sm transition-all shadow-sm shadow-amber-400/30 disabled:opacity-60"
+                >
+                  {checkoutLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Preparing checkout...</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4" /> Upgrade to Pro — $8/month</>
+                  )}
+                </button>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Cancel anytime</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Account Information ───────────────────────────────────────────── */}
         <div className="dashboard-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -57,7 +213,6 @@ export default function SettingsPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
-
                 Role
               </label>
               <div className="flex items-center gap-2">
@@ -86,6 +241,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* ── Preferences ──────────────────────────────────────────────────── */}
         <div className="dashboard-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -106,10 +262,7 @@ export default function SettingsPage() {
                 type="checkbox"
                 checked={preferences.showConfidence !== false}
                 onChange={(e) =>
-                  setPreferences({
-                    ...preferences,
-                    showConfidence: e.target.checked,
-                  })
+                  setPreferences({ ...preferences, showConfidence: e.target.checked })
                 }
                 className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
               />
@@ -130,6 +283,7 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
       </div>
     </div>
   );
