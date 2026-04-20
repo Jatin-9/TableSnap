@@ -315,18 +315,6 @@ export default function RemindersPage() {
         </div>
       </div>
 
-      {/* Setup notice — reminds the user what still needs to be done in Supabase */}
-      <div className="mt-6 p-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-900/30">
-        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">One-time setup required</p>
-        <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-          Emails are sent via{' '}
-          <span className="font-medium">Resend</span>. Add your{' '}
-          <code className="bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded text-xs">RESEND_API_KEY</code>{' '}
-          to Supabase secrets and deploy the{' '}
-          <code className="bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded text-xs">send-vocab-email</code>{' '}
-          edge function to activate delivery.
-        </p>
-      </div>
     </div>
   );
 }

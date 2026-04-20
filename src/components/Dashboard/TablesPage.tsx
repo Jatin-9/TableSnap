@@ -1129,7 +1129,7 @@ export default function TablesPage() {
                   <thead className="bg-gray-50 dark:bg-zinc-800">
                     <tr>
                       {editColumns.map((col, colIdx) => (
-                        <th key={colIdx} className="p-2 text-left group">
+                        <th key={col} className="p-2 text-left group">
                           <div className="flex items-center gap-1">
                             <input
                               type="text"
@@ -1154,7 +1154,7 @@ export default function TablesPage() {
                     {editRows.map((row, rowIdx) => (
                       <tr key={rowIdx} className="border-t border-gray-100 dark:border-zinc-800 group">
                         {editColumns.map((col, colIdx) => (
-                          <td key={colIdx} className="p-2">
+                          <td key={col} className="p-2">
                             <input
                               type="text"
                               value={row[col] ?? ''}
