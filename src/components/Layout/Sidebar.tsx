@@ -9,8 +9,10 @@ import {
   MessageSquare,
   BookOpen,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUsage } from '../../hooks/useUsage';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -21,6 +23,7 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const { user, isSuperAdmin } = useAuth();
+  const { isPro } = useUsage();
 
   const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
 
@@ -75,6 +78,12 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             <Table2 className="w-4 h-4 text-white" />
           </div>
           <span className="text-base font-bold text-gray-900 dark:text-white">TableSnap</span>
+          {isPro && (
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-sm shadow-amber-400/40 ring-1 ring-amber-300/50">
+              <Sparkles className="w-2.5 h-2.5" />
+              PRO
+            </span>
+          )}
         </Link>
         {/* Close button — only visible inside the mobile drawer */}
         <button
