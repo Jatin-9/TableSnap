@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { supabase } from './lib/supabase';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LandingPage from './components/Landing/LandingPage';
 import LoginPage from './components/Auth/LoginPage';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -17,21 +18,54 @@ import ResetPasswordPage from './components/Auth/ResetPasswordPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Toaster, toast } from 'sonner';
 
-// Detects the ?upgraded=true param Lemon Squeezy appends after a successful
-// payment, shows a success toast, then strips the param from the URL so it
-// doesn't show again on refresh.
+// Detects the ?upgraded=true param Lemon Squeezy appends after a successful payment.
+// The webhook that actually flips the tier in the DB fires asynchronously — it can
+// arrive 1–5 seconds after the redirect. So we poll the DB every 2s for up to 12s
+// until the tier becomes 'pro', then force a page reload so all hooks get fresh data.
 function UpgradeSuccessHandler() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('upgraded') === 'true') {
-      toast.success('Welcome to Pro! Your account has been upgraded.', { duration: 6000 });
-      params.delete('upgraded');
-      navigate({ search: params.toString() }, { replace: true });
-    }
-  }, [location.search]);
+    if (params.get('upgraded') !== 'true') return;
+
+    // Strip the param immediately so it doesn't re-trigger on refresh
+    params.delete('upgraded');
+    navigate({ search: params.toString() }, { replace: true });
+
+    if (!user) return;
+
+    toast.loading('Activating your Pro account…', { id: 'upgrade-pending' });
+
+    let attempts = 0;
+    const maxAttempts = 6; // 6 × 2s = 12 seconds total
+
+    const poll = setInterval(async () => {
+      attempts++;
+      const { data } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', user.id)
+        .single();
+
+      if (data?.tier === 'pro') {
+        clearInterval(poll);
+        toast.dismiss('upgrade-pending');
+        toast.success('Welcome to Pro! Your account has been upgraded.', { duration: 6000 });
+        // Reload so useUsage and all other hooks pick up the new tier
+        window.location.reload();
+      } else if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        toast.dismiss('upgrade-pending');
+        // Webhook may be delayed — prompt the user to refresh manually
+        toast.error('Upgrade is taking longer than expected. Please refresh the page.', { duration: 10000 });
+      }
+    }, 2000);
+
+    return () => clearInterval(poll);
+  }, [location.search, user]);
 
   return null;
 }
