@@ -9,7 +9,6 @@ const LANGUAGES_SUPPORTED = 50;
 // If value is 0 (data hasn't loaded yet) the counter just shows 0 and waits.
 function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
   const [count, setCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Wait until we have a real value from the DB
