@@ -52,7 +52,8 @@ export default function StatsSection() {
     supabase
       .rpc('get_public_stats')
       .then(({ data, error }) => {
-        if (error || !data) return; // silently fail — stats are non-critical
+        console.log('public stats:', data, error);
+        if (error || !data) return;
         setTotalTables(data.total_tables ?? 0);
         setTotalUsers(data.total_users ?? 0);
       });
