@@ -416,11 +416,8 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "TableSnap <onboarding@resend.dev>",
-        // RESEND_TEST_TO overrides the recipient — use this when your Resend
-        // account email differs from your Supabase account email. Without a
-        // verified domain, Resend only allows sending to the account's own email.
-        to: [Deno.env.get("RESEND_TEST_TO") ?? userData.email],
+        from: "TableSnap <noreply@tablesnap.co.in>",
+        to: [userData.email],
         subject: `📚 Your ${reminder.frequency} vocab words — ${today.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
         html,
       }),
