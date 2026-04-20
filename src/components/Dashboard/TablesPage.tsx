@@ -229,9 +229,12 @@ export default function TablesPage() {
       setTimeout(() => setAnkiStatus('idle'), 3000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      // "Failed to fetch" means the browser couldn't reach localhost:8765 at all —
+      // either Anki isn't running, AnkiConnect isn't installed, or (most likely when
+      // using the hosted app) the domain hasn't been added to AnkiConnect's CORS list.
       setAnkiError(
         message.includes('Failed to fetch')
-          ? 'Could not reach Anki. Make sure Anki is open and AnkiConnect plugin is installed.'
+          ? 'CORS_OR_OFFLINE'
           : message,
       );
       setAnkiStatus('error');
@@ -1039,9 +1042,22 @@ export default function TablesPage() {
               </p>
             )}
             {ankiStatus === 'error' && (
-              <p className="mx-5 mb-4 px-3 py-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
-                {ankiError}
-              </p>
+              <div className="mx-5 mb-4 px-3 py-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 space-y-2">
+                {ankiError === 'CORS_OR_OFFLINE' ? (
+                  <>
+                    <p className="font-semibold">Could not reach Anki on your computer.</p>
+                    <p>Follow these steps to fix it:</p>
+                    <ol className="list-decimal list-inside space-y-1 pl-1">
+                      <li>Open <strong>Anki</strong> on your computer.</li>
+                      <li>Install the <strong>AnkiConnect</strong> add-on (code: <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">2055492</code>).</li>
+                      <li>Go to <strong>Tools → Add-ons → AnkiConnect → Config</strong> and add <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">https://tablesnap.co.in</code> to <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">webCorsOriginList</code>.</li>
+                      <li>Restart Anki, then try again.</li>
+                    </ol>
+                  </>
+                ) : (
+                  <p>{ankiError}</p>
+                )}
+              </div>
             )}
           </div>
         </div>
