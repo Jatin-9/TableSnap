@@ -17,6 +17,7 @@ import {
 } from 'chart.js';
 import { Download, Users, Table2, TrendingUp, Activity, Camera } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 
 ChartJS.register(
   CategoryScale,
@@ -104,7 +105,7 @@ export default function SuperAdminPage() {
       link.click();
     } catch (err) {
       console.error('Failed to capture admin image:', err);
-      alert('Could not save image. Please try again.');
+      toast.error('Could not save image. Please try again.');
     } finally {
       setSavingImage(false);
     }

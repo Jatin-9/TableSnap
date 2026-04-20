@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, Image as ImageIcon, Loader2, X, CheckCircle, AlertCircle, Trash2, FileText } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { toast } from 'sonner';
 import { useUsage } from '../../hooks/useUsage';
 import UpgradeModal from '../ui/UpgradeModal';
 import { AiColumnHeader } from '../ui/AiColumnHeader';
@@ -161,7 +162,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Could not read PDF';
-          alert(`Skipped "${file.name}": ${msg}`);
+          toast.error(`Skipped "${file.name}": ${msg}`);
         }
       } else {
         // Regular image — existing flow
@@ -545,7 +546,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
       onSaved?.();
     } else if (upgradeModal === null) {
       // Only show the generic failure alert if we didn't already show a limit modal
-      alert('Failed to save tables. Please try again.');
+      toast.error('Failed to save tables. Please try again.');
     }
   };
 
@@ -559,7 +560,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     );
 
     if (validFiles.length < selectedFiles.length) {
-      alert('Some files were skipped — only image files and PDFs are accepted.');
+      toast.warning('Some files were skipped — only image files and PDFs are accepted.');
     }
 
     // Work out how many slots are left before we hit the cap.
@@ -569,7 +570,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     const remainingSlots = MAX_IMAGES - currentCount;
 
     if (remainingSlots <= 0) {
-      alert(`You've reached the maximum of ${MAX_IMAGES} items per session.`);
+      toast.warning(`You've reached the maximum of ${MAX_IMAGES} items per session.`);
       e.target.value = '';
       return;
     }
@@ -578,7 +579,7 @@ export default function UploadPage({ onSaved, onClose }: UploadPageProps) {
     const filesToAdd = validFiles.slice(0, remainingSlots);
 
     if (validFiles.length > remainingSlots) {
-      alert(
+      toast.warning(
         `Only ${remainingSlots} more file${remainingSlots !== 1 ? 's' : ''} can be added ` +
         `(max ${MAX_IMAGES} total). The first ${remainingSlots} were selected.`
       );

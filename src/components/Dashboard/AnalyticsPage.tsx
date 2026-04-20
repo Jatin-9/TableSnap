@@ -18,6 +18,7 @@ import {
 import { Camera, Table2, AlignJustify, Globe, Star } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { StatCardSkeleton, ChartSkeleton } from '../ui/Skeleton';
+import { toast } from 'sonner';
 
 ChartJS.register(
   CategoryScale,
@@ -260,7 +261,7 @@ export default function AnalyticsPage() {
       link.click();
     } catch (err) {
       console.error('Failed to capture analytics image:', err);
-      alert('Could not save image. Please try again.');
+      toast.error('Could not save image. Please try again.');
     } finally {
       setSavingImage(false);
     }

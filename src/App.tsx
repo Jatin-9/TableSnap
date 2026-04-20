@@ -14,11 +14,14 @@ import SuperAdminPage from './components/SuperAdmin/SuperAdminPage';
 import SharedTablePage from './components/Share/SharedTablePage';
 import ResetPasswordPage from './components/Auth/ResetPasswordPage';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
+        {/* Toaster renders the toast notifications — richColors gives red/green/yellow styling automatically */}
+        <Toaster position="top-right" richColors />
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />

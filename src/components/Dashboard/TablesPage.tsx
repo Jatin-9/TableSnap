@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, TableSnapshot } from '../../lib/supabase';
+import { toast } from 'sonner';
 import {
   Download, Eye, Trash2, Pencil, Check, X, Plus, Layers,
   CheckSquare, Square, Clipboard, BookOpen, Share2, Search, FileText,
@@ -112,7 +113,12 @@ export default function TablesPage() {
   const deleteSnapshot = async (id: string) => {
     if (!confirm('Are you sure you want to delete this table?')) return;
     const { error } = await supabase.from('table_snapshots').delete().eq('id', id);
-    if (!error) fetchSnapshots();
+    if (error) {
+      toast.error('Failed to delete table. Please try again.');
+    } else {
+      toast.success('Table deleted.');
+      fetchSnapshots();
+    }
   };
 
   // ── Export helpers ────────────────────────────────────────────────────────
@@ -441,8 +447,9 @@ export default function TablesPage() {
 
     if (error) {
       console.error('Update error:', error);
-      alert('Failed to save changes. Please try again.');
+      toast.error('Failed to save changes. Please try again.');
     } else {
+      toast.success('Changes saved.');
       await fetchSnapshots();
       closeEditModal();
     }
@@ -468,8 +475,9 @@ export default function TablesPage() {
 
     if (error) {
       console.error('Insert error:', error);
-      alert('Failed to create new table. Please try again.');
+      toast.error('Failed to create new table. Please try again.');
     } else {
+      toast.success('Saved as new table.');
       await fetchSnapshots();
       closeEditModal();
     }
@@ -542,7 +550,7 @@ export default function TablesPage() {
 
     if (insertErr) {
       console.error('Merge insert error:', insertErr);
-      alert('Failed to merge. Please try again.');
+      toast.error('Failed to merge. Please try again.');
       setMergeSaving(false);
       return;
     }
@@ -551,6 +559,7 @@ export default function TablesPage() {
       await supabase.from('table_snapshots').delete().in('id', [...selectedIds]);
     }
 
+    toast.success('Tables merged successfully.');
     await fetchSnapshots();
     setShowMergeModal(false);
     setSelectMode(false);

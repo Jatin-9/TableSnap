@@ -3,6 +3,7 @@ import { Bell, BellOff, Mail, Calendar, Loader2, CheckCircle, Send } from 'lucid
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Reminder } from '../../lib/supabase';
 import { RemindersSkeleton } from '../ui/Skeleton';
+import { toast } from 'sonner';
 
 export default function RemindersPage() {
   const { user } = useAuth();
@@ -77,7 +78,7 @@ export default function RemindersPage() {
 
     if (error) {
       console.error('Error saving reminder:', error);
-      alert('Failed to save. Please try again.');
+      toast.error('Failed to save. Please try again.');
     } else {
       // Show a brief "Saved!" tick then fade it out after 3 seconds
       setSaved(true);
@@ -125,7 +126,7 @@ export default function RemindersPage() {
       clearTimeout(timeoutId);
       if (err instanceof Error && err.name === 'AbortError') {
         setTestDetail('Request timed out after 90s — check Supabase function logs.');
-        setTestResult('success');
+        setTestResult('error');
       } else {
         setTestDetail(err instanceof Error ? err.message : String(err));
         setTestResult('error');
