@@ -293,6 +293,9 @@ Deno.serve(async (req) => {
     incomingCronSecret.length === cronSecret.length &&
     incomingCronSecret.split("").every((c, i) => c === cronSecret[i]);
 
+  // The user ID of the person who clicked "Send test email", or null for cron.
+  let callerUserId: string | null = null;
+
   if (!isCronCall) {
     // Path 2: user JWT — fall back to verifying the bearer token.
     const authHeader = req.headers.get("Authorization");
@@ -307,6 +310,18 @@ Deno.serve(async (req) => {
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
+    // Remember who triggered this so we can limit sending to just them below.
+    callerUserId = user.id;
+  }
+
+  // Parse the request body to check if this is a manual test send.
+  // The frontend sends { test: true } when the user clicks "Send test email".
+  let isTestSend = false;
+  try {
+    const body = await req.json();
+    isTestSend = body?.test === true;
+  } catch {
+    // No body or invalid JSON — treat as a normal cron-style call
   }
 
   // Use service role client so we can read any user's data (bypasses RLS)
@@ -341,10 +356,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Filter: daily every day, weekly only on Mondays
-  const toNotify = reminders.filter(
-    (r) => r.frequency === "daily" || (r.frequency === "weekly" && isMonday),
-  );
+  // For a manual test send, only process the user who clicked the button —
+  // never send to other users' emails just because they also have reminders on.
+  // For the cron job, apply the normal day filter (daily every day, weekly only Monday).
+  const toNotify = reminders.filter((r) => {
+    if (isTestSend && callerUserId) return r.user_id === callerUserId;
+    return r.frequency === "daily" || (r.frequency === "weekly" && isMonday);
+  });
 
   const results = [];
 
