@@ -1,5 +1,8 @@
-import { X, Upload, MessageSquare, Database, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { X, Upload, MessageSquare, Database, Sparkles, Loader2 } from 'lucide-react';
 import { LIMITS, PRO_LIMITS } from '../../hooks/useUsage';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'sonner';
 
 type LimitType = 'uploads' | 'storage' | 'chat';
 
@@ -49,9 +52,43 @@ const CONFIG: Record<LimitType, {
 };
 
 export default function UpgradeModal({ isOpen, onClose, limitType, current }: UpgradeModalProps) {
+  const [loading, setLoading] = useState(false);
+
   if (!isOpen) return null;
 
   const { icon: Icon, iconBg, iconColor, title, limit, unit, description } = CONFIG[limitType];
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data.url) {
+        toast.error('Could not start checkout. Please try again.');
+        return;
+      }
+
+      // Redirect to the Lemon Squeezy hosted checkout page
+      window.location.href = data.url;
+    } catch {
+      toast.error('Could not start checkout. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -103,10 +140,15 @@ export default function UpgradeModal({ isOpen, onClose, limitType, current }: Up
         {/* CTAs */}
         <div className="space-y-2">
           <button
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+            onClick={handleUpgrade}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60"
           >
-            <Sparkles className="w-4 h-4" />
-            Upgrade to Pro — $8/month
+            {loading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Preparing checkout...</>
+            ) : (
+              <><Sparkles className="w-4 h-4" /> Upgrade to Pro — $8/month</>
+            )}
           </button>
           <button
             onClick={onClose}
