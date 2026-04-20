@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsage, LIMITS, PRO_LIMITS } from '../../hooks/useUsage';
 import { supabase } from '../../lib/supabase';
@@ -22,6 +22,20 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+
+  // Fetch the customer portal URL so "Manage subscription" links to the right place
+  useEffect(() => {
+    if (!isPro || !user) return;
+    supabase
+      .from('users')
+      .select('subscription_portal_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.subscription_portal_url) setPortalUrl(data.subscription_portal_url);
+      });
+  }, [isPro, user]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -159,16 +173,23 @@ export default function SettingsPage() {
 
             {/* CTA */}
             {isPro ? (
-              // Pro users — link to Lemon Squeezy customer portal to manage/cancel
-              <a
-                href="https://app.lemonsqueezy.com/my-orders"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Manage subscription
-              </a>
+              // Pro users — link to their personal Lemon Squeezy customer portal
+              // portalUrl is saved by the webhook on subscription_created/updated
+              portalUrl ? (
+                <a
+                  href={portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Manage subscription
+                </a>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  To cancel, email us at support@tablesnap.co.in
+                </p>
+              )
             ) : (
               // Free users — upgrade button
               <div className="flex items-center gap-4">
