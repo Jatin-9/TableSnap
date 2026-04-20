@@ -1,18 +1,25 @@
 import { useEffect, useState, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
 
-const stats = [
-  { value: 10000, suffix: '+', label: 'Tables extracted' },
-  { value: 50, suffix: '+', label: 'Languages supported' },
-  { value: 30, suffix: '+', label: 'Countries' },
-];
+// "Languages supported" is a static product claim — the AI model genuinely
+// handles 50+ languages, so this number doesn't come from the DB.
+const LANGUAGES_SUPPORTED = 50;
 
-// Counts up from 0 to `value` when the element scrolls into view
+// Counts up from 0 to `value` when the element scrolls into view.
+// If value is 0 (data hasn't loaded yet) the counter just shows 0 and waits.
 function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
   const [count, setCount] = useState(0);
   const [hasAnimated, setHasAnimated] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Reset animation if the real value arrives after the component is already visible
+    if (value > 0) setHasAnimated(false);
+  }, [value]);
+
+  useEffect(() => {
+    if (value === 0) return;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !hasAnimated) {
@@ -50,6 +57,28 @@ function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
 }
 
 export default function StatsSection() {
+  // Real numbers pulled from the DB via the get_public_stats() function.
+  // We start at 0 so the page renders instantly, then the counters animate
+  // up to the real values once the fetch completes.
+  const [totalTables, setTotalTables] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+
+  useEffect(() => {
+    supabase
+      .rpc('get_public_stats')
+      .then(({ data, error }) => {
+        if (error || !data) return; // silently fail — stats are non-critical
+        setTotalTables(data.total_tables ?? 0);
+        setTotalUsers(data.total_users ?? 0);
+      });
+  }, []);
+
+  const stats = [
+    { value: totalTables,        suffix: '+', label: 'Tables extracted'   },
+    { value: LANGUAGES_SUPPORTED, suffix: '+', label: 'Languages supported' },
+    { value: totalUsers,          suffix: '+', label: 'Users signed up'    },
+  ];
+
   return (
     <section className="py-16 px-4 sm:px-6 lg:px-8 border-y border-gray-200/50 dark:border-gray-800/50">
       <div className="max-w-4xl mx-auto">
