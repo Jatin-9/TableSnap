@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 // "Languages supported" is a static product claim — the AI model genuinely
@@ -9,48 +9,34 @@ const LANGUAGES_SUPPORTED = 50;
 // If value is 0 (data hasn't loaded yet) the counter just shows 0 and waits.
 function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
   const [count, setCount] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Reset animation if the real value arrives after the component is already visible
-    if (value > 0) setHasAnimated(false);
-  }, [value]);
-
-  useEffect(() => {
+    // Wait until we have a real value from the DB
     if (value === 0) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated) {
-          setHasAnimated(true);
-          const duration = 2000;
-          const steps = 60;
-          const increment = value / steps;
-          let current = 0;
+    // Animate straight to the value — no need to wait for scroll since
+    // the data arrives asynchronously after the page has already loaded
+    const duration = 2000;
+    const steps = 60;
+    const increment = value / steps;
+    let current = 0;
 
-          const timer = setInterval(() => {
-            current += increment;
-            if (current >= value) {
-              setCount(value);
-              clearInterval(timer);
-            } else {
-              setCount(Math.floor(current));
-            }
-          }, duration / steps);
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= value) {
+        setCount(value);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(current));
+      }
+    }, duration / steps);
 
-          return () => clearInterval(timer);
-        }
-      },
-      { threshold: 0.5 }
-    );
-
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [value, hasAnimated]);
+    return () => clearInterval(timer);
+  }, [value]);
 
   return (
-    <div ref={ref} className="text-3xl sm:text-4xl font-bold text-blue-500">
+    <div className="text-3xl sm:text-4xl font-bold text-blue-500">
       {count.toLocaleString()}{suffix}
     </div>
   );
