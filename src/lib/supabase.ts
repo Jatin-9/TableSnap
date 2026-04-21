@@ -17,6 +17,8 @@ export interface User {
   created_at: string;
   preferences: Record<string, unknown>;
   last_active_at: string | null;
+  subscription_status: string | null;
+  subscription_ends_at: string | null;
 }
 
 export type TableSnapshot = {

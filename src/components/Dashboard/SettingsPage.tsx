@@ -24,8 +24,12 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
-  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(
+    user?.subscription_status ?? null
+  );
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(
+    user?.subscription_ends_at ?? null
+  );
 
   // On load, ask the edge function to fetch live status from Dodo and sync it to DB.
   // We do this because Dodo doesn't fire a webhook immediately on cancellation —
