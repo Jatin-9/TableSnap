@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsage, LIMITS, PRO_LIMITS } from '../../hooks/useUsage';
 import { supabase } from '../../lib/supabase';
@@ -16,12 +16,26 @@ import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
-  const { isPro, uploadsThisMonth, totalTables, chatQueriesThisMonth } = useUsage();
+  const { isPro, uploadsThisMonth, totalTables, chatQueriesThisMonth, loading: usageLoading } = useUsage();
 
   const [preferences, setPreferences] = useState(user?.preferences || {});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+
+  // Fetch the customer portal URL so "Manage subscription" links to the right place
+  useEffect(() => {
+    if (!isPro || !user) return;
+    supabase
+      .from('users')
+      .select('subscription_portal_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.subscription_portal_url) setPortalUrl(data.subscription_portal_url);
+      });
+  }, [isPro, user]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -100,6 +114,18 @@ export default function SettingsPage() {
 
         {/* ── Plan & Billing ────────────────────────────────────────────────── */}
         <div className="dashboard-card overflow-hidden">
+          {/* Show a neutral skeleton until we know the user's tier */}
+          {usageLoading ? (
+            <div className="p-6 border-b border-gray-100 dark:border-zinc-800 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-zinc-700" />
+                <div className="space-y-2">
+                  <div className="h-4 w-24 rounded bg-gray-200 dark:bg-zinc-700" />
+                  <div className="h-3 w-36 rounded bg-gray-200 dark:bg-zinc-700" />
+                </div>
+              </div>
+            </div>
+          ) : (<>
           {/* Card header — gradient for Pro, plain for Free */}
           <div className={`p-6 ${isPro
             ? 'bg-gradient-to-r from-amber-500 to-orange-500'
@@ -159,16 +185,23 @@ export default function SettingsPage() {
 
             {/* CTA */}
             {isPro ? (
-              // Pro users — link to Lemon Squeezy customer portal to manage/cancel
-              <a
-                href="https://app.lemonsqueezy.com/my-orders"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Manage subscription
-              </a>
+              // Pro users — link to their personal Lemon Squeezy customer portal
+              // portalUrl is saved by the webhook on subscription_created/updated
+              portalUrl ? (
+                <a
+                  href={portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Manage subscription
+                </a>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  To cancel, email us at support@tablesnap.co.in
+                </p>
+              )
             ) : (
               // Free users — upgrade button
               <div className="flex items-center gap-4">
@@ -187,6 +220,7 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+          </>)}
         </div>
 
         {/* ── Account Information ───────────────────────────────────────────── */}

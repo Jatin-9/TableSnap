@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, Sparkles, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUsage } from '../../hooks/useUsage';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ const PRO_FEATURES = [
 
 export default function PricingSection() {
   const { user, loading } = useAuth();
+  const { isPro } = useUsage();
   const navigate = useNavigate();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
@@ -111,7 +113,6 @@ export default function PricingSection() {
 
           {/* Pro plan */}
           <div className="relative glass-card rounded-2xl p-8 border-blue-600/50 shadow-lg shadow-blue-600/10">
-            {/* Most Popular badge */}
             <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-600 text-white">
               <Sparkles className="w-3 h-3 mr-1" />
               Most Popular
@@ -135,25 +136,29 @@ export default function PricingSection() {
               ))}
             </ul>
 
-            {/* Button — triggers checkout for logged-in users, login page for guests */}
             {!loading && (
-              <button
-                onClick={handleProClick}
-                disabled={checkoutLoading}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60"
-              >
-                {checkoutLoading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Preparing checkout...</>
-                ) : (
-                  <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
-                )}
-              </button>
+              isPro ? (
+                <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium bg-green-600/10 text-green-600 dark:text-green-400 border border-green-600/30 cursor-default">
+                  <Sparkles className="w-4 h-4" /> You're on Pro ✓
+                </div>
+              ) : (
+                <button
+                  onClick={handleProClick}
+                  disabled={checkoutLoading}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60"
+                >
+                  {checkoutLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Preparing checkout...</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
+                  )}
+                </button>
+              )
             )}
           </div>
 
         </div>
 
-        {/* Reassurance lines */}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-8">
           No credit card required · Cancel anytime
         </p>

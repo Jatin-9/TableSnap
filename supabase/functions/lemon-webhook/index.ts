@@ -70,22 +70,44 @@ Deno.serve(async (req) => {
     const isActive = status === "active" || status === "on_trial";
 
     if (isActive) {
+      const portalUrl = event.data?.attributes?.urls?.customer_portal as string | undefined;
+
       const { error } = await supabase.rpc("upgrade_user_tier", {
         target_user_id: userId,
         new_tier: "pro",
       });
-      if (error) console.error("Failed to upgrade user:", error);
-      else console.log("Upgraded user to pro:", userId);
+      if (error) {
+        console.error("Failed to upgrade user:", error);
+      } else {
+        console.log("Upgraded user to pro:", userId);
+        // Save the customer portal URL so the user can manage/cancel from within the app
+        if (portalUrl) {
+          const { error: urlError } = await supabase
+            .from("users")
+            .update({ subscription_portal_url: portalUrl })
+            .eq("id", userId);
+          if (urlError) console.error("Failed to save portal URL:", urlError);
+        }
+      }
     }
-  } else if (eventName === "subscription_expired") {
-    // subscription_expired = subscription fully ended (not just cancelled)
-    // subscription_cancelled means cancelled but still active until period end
+  } else if (eventName === "subscription_cancelled" || eventName === "subscription_expired") {
+    // subscription_cancelled = user cancelled; in production they stay Pro until the period ends.
+    // subscription_expired   = billing period ended; access stops now.
+    // We downgrade on both because in test mode Lemon Squeezy never fires subscription_expired
+    // after a cancellation — the subscription just stays "cancelled" forever.
     const { error } = await supabase.rpc("upgrade_user_tier", {
       target_user_id: userId,
       new_tier: "free",
     });
-    if (error) console.error("Failed to downgrade user:", error);
-    else console.log("Downgraded user to free:", userId);
+    if (error) {
+      console.error("Failed to downgrade user:", error);
+    } else {
+      console.log("Downgraded user to free:", userId);
+      await supabase
+        .from("users")
+        .update({ subscription_portal_url: null })
+        .eq("id", userId);
+    }
   }
 
   return new Response("ok", { status: 200 });
