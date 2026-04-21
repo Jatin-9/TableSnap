@@ -68,8 +68,8 @@ Deno.serve(async (req) => {
   // user_id is passed via metadata when the checkout session is created
   const userId     = event.data?.metadata?.user_id as string | undefined;
   const customerId = event.data?.customer?.customer_id as string | undefined;
-  // ISO timestamp for when the current paid period ends
-  const periodEnd  = event.data?.current_period_end as string | undefined;
+  // ISO timestamp for when the current paid period ends (Dodo field: next_billing_date)
+  const periodEnd  = event.data?.next_billing_date as string | undefined;
 
   console.log("Received event:", eventType, "user:", userId, "customer:", customerId);
 

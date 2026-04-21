@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import DodoPayments from "npm:dodopayments";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,24 +47,16 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "No subscription found" }, 404);
   }
 
-  const apiKey  = Deno.env.get("DODO_PAYMENTS_API_KEY")!;
-  const baseUrl = Deno.env.get("DODO_API_BASE_URL") ?? "https://test.dodopayments.com";
+  const apiKey      = Deno.env.get("DODO_PAYMENTS_API_KEY")!;
+  // "test_mode" uses test.dodopayments.com, "live_mode" uses api.dodopayments.com
+  const environment = Deno.env.get("DODO_API_BASE_URL")?.includes("test")
+    ? "test_mode" as const
+    : "live_mode" as const;
 
-  const res = await fetch(`${baseUrl}/customers/${profile.dodo_customer_id}/customer-portal`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ return_url: "https://tablesnap.co.in/dashboard" }),
+  const dodo   = new DodoPayments({ bearerToken: apiKey, environment });
+  const portal = await dodo.customers.customerPortal.create(profile.dodo_customer_id, {
+    return_url: "https://tablesnap.co.in/dashboard",
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error("Dodo portal error:", JSON.stringify(data));
-    return jsonResponse({ error: "Failed to create portal session" }, 500);
-  }
-
-  return jsonResponse({ url: data.link });
+  return jsonResponse({ url: portal.link });
 });
