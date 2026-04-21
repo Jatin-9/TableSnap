@@ -82,7 +82,12 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (eventType === "subscription.active") {
+  if (
+    eventType === "subscription.active" ||
+    // payment.succeeded fires when the card is charged — upgrade immediately
+    // instead of waiting for subscription.active which may come later
+    (eventType === "payment.succeeded" && event.data?.subscription_id)
+  ) {
     const { error } = await supabase.rpc("upgrade_user_tier", {
       target_user_id: userId,
       new_tier: "pro",
