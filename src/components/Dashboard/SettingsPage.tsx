@@ -27,20 +27,33 @@ export default function SettingsPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
 
-  // Fetch subscription status so we can show a cancellation warning if needed
+  // On load, ask the edge function to fetch live status from Dodo and sync it to DB.
+  // We do this because Dodo doesn't fire a webhook immediately on cancellation —
+  // it just sets cancel_at_next_billing_date=true and waits until the period ends.
   useEffect(() => {
     if (!isPro || !user) return;
-    supabase
-      .from('users')
-      .select('subscription_status, subscription_ends_at')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setSubscriptionStatus(data.subscription_status);
-          setSubscriptionEndsAt(data.subscription_ends_at);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-subscription`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${session?.access_token}`,
+            },
+          }
+        );
+        const data = await res.json();
+        if (res.ok) {
+          setSubscriptionStatus(data.status);
+          setSubscriptionEndsAt(data.ends_at);
         }
-      });
+      } catch {
+        // Non-critical — silently fall back to no banner
+      }
+    });
   }, [isPro, user]);
 
   const handleSave = async () => {

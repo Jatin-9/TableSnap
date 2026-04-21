@@ -66,10 +66,11 @@ Deno.serve(async (req) => {
   const eventType = event.type as string | undefined;
 
   // user_id is passed via metadata when the checkout session is created
-  const userId     = event.data?.metadata?.user_id as string | undefined;
-  const customerId = event.data?.customer?.customer_id as string | undefined;
+  const userId         = event.data?.metadata?.user_id as string | undefined;
+  const customerId     = event.data?.customer?.customer_id as string | undefined;
+  const subscriptionId = event.data?.subscription_id as string | undefined;
   // ISO timestamp for when the current paid period ends (Dodo field: next_billing_date)
-  const periodEnd  = event.data?.next_billing_date as string | undefined;
+  const periodEnd      = event.data?.next_billing_date as string | undefined;
 
   console.log("Received event:", eventType, "user:", userId, "customer:", customerId);
 
@@ -101,9 +102,10 @@ Deno.serve(async (req) => {
       await supabase
         .from("users")
         .update({
-          dodo_customer_id:     customerId ?? null,
-          subscription_status:  "active",
-          subscription_ends_at: periodEnd ?? null,
+          dodo_customer_id:      customerId ?? null,
+          dodo_subscription_id:  subscriptionId ?? null,
+          subscription_status:   "active",
+          subscription_ends_at:  periodEnd ?? null,
         })
         .eq("id", userId);
     }
