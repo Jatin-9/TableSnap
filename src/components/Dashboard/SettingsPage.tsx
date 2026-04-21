@@ -146,7 +146,7 @@ export default function SettingsPage() {
                     {isPro ? 'Pro Plan' : 'Free Plan'}
                   </h2>
                   <p className={`text-sm ${isPro ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {isPro ? '$8 / month · Billed via Lemon Squeezy' : 'Upgrade to unlock higher limits'}
+                    {isPro ? '$8 / month · Billed via Dodo Payments' : 'Upgrade to unlock higher limits'}
                   </p>
                 </div>
               </div>

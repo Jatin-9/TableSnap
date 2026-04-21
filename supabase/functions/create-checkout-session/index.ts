@@ -31,56 +31,42 @@ Deno.serve(async (req) => {
 
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  const apiKey   = Deno.env.get("LEMON_SQUEEZY_API_KEY")!;
-  const variantId = Deno.env.get("LEMON_SQUEEZY_VARIANT_ID")!;
-  const storeId  = Deno.env.get("LEMON_SQUEEZY_STORE_ID")!;
+  const apiKey    = Deno.env.get("DODO_PAYMENTS_API_KEY")!;
+  const productId = Deno.env.get("DODO_PRODUCT_ID")!;
+  // test.dodopayments.com for test mode — change to api.dodopayments.com when going live
+  const baseUrl   = Deno.env.get("DODO_API_BASE_URL") ?? "https://test.dodopayments.com";
 
-  // Create a Lemon Squeezy hosted checkout session.
+  // Create a Dodo Payments hosted checkout session.
   // We pass the user's email so the checkout form is pre-filled, and embed
-  // user_id in custom_data so the webhook knows which DB row to update.
-  const lsRes = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
+  // user_id in metadata so the webhook knows which DB row to upgrade.
+  const dodoRes = await fetch(`${baseUrl}/checkouts`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/vnd.api+json",
-      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      data: {
-        type: "checkouts",
-        attributes: {
-          checkout_data: {
-            email: user.email,
-            custom: {
-              // This is passed back in webhook.meta.custom_data
-              user_id: user.id,
-            },
-          },
-          product_options: {
-            // After payment, send the user back to the dashboard with a success flag
-            redirect_url: "https://tablesnap.co.in/dashboard?upgraded=true",
-          },
-        },
-        relationships: {
-          store: {
-            data: { type: "stores", id: storeId },
-          },
-          variant: {
-            data: { type: "variants", id: variantId },
-          },
-        },
+      product_cart: [{ product_id: productId, quantity: 1 }],
+      customer: {
+        email: user.email,
+        name: user.email,
       },
+      metadata: {
+        // Echoed back in the webhook payload so we know which user to upgrade
+        user_id: user.id,
+      },
+      return_url: "https://tablesnap.co.in/dashboard?upgraded=true",
     }),
   });
 
-  const lsData = await lsRes.json();
+  const dodoData = await dodoRes.json();
 
-  if (!lsRes.ok) {
-    console.error("Lemon Squeezy error:", JSON.stringify(lsData));
+  if (!dodoRes.ok) {
+    console.error("Dodo Payments error:", JSON.stringify(dodoData));
     return jsonResponse({ error: "Failed to create checkout session" }, 500);
   }
 
-  const checkoutUrl = lsData.data?.attributes?.url;
+  const checkoutUrl = dodoData.checkout_url;
   if (!checkoutUrl) return jsonResponse({ error: "No checkout URL returned" }, 500);
 
   return jsonResponse({ url: checkoutUrl });
