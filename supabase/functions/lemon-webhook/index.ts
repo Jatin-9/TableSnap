@@ -38,7 +38,7 @@ async function verifySignature(
 }
 
 Deno.serve(async (req) => {
-  const secret    = Deno.env.get("DODO_WEBHOOK_SECRET") ?? "";
+  const secret           = Deno.env.get("DODO_WEBHOOK_SECRET") ?? "";
   const webhookId        = req.headers.get("webhook-id") ?? "";
   const webhookTimestamp = req.headers.get("webhook-timestamp") ?? "";
   const webhookSignature = req.headers.get("webhook-signature") ?? "";
@@ -66,12 +66,14 @@ Deno.serve(async (req) => {
   const eventType = event.type as string | undefined;
 
   // user_id is passed via metadata when the checkout session is created
-  const userId = event.data?.metadata?.user_id as string | undefined;
+  const userId     = event.data?.metadata?.user_id as string | undefined;
+  const customerId = event.data?.customer?.customer_id as string | undefined;
+  // ISO timestamp for when the current paid period ends
+  const periodEnd  = event.data?.current_period_end as string | undefined;
 
-  console.log("Received event:", eventType, "for user:", userId);
+  console.log("Received event:", eventType, "user:", userId, "customer:", customerId);
 
   if (!userId) {
-    // Fall back to looking up by email if metadata was not passed through
     console.warn("No user_id in metadata — ignoring event");
     return new Response("ok", { status: 200 });
   }
@@ -85,7 +87,6 @@ Deno.serve(async (req) => {
   if (
     eventType === "subscription.active" ||
     // payment.succeeded fires when the card is charged — upgrade immediately
-    // instead of waiting for subscription.active which may come later
     (eventType === "payment.succeeded" && event.data?.subscription_id)
   ) {
     const { error } = await supabase.rpc("upgrade_user_tier", {
@@ -96,13 +97,34 @@ Deno.serve(async (req) => {
       console.error("Failed to upgrade user:", error);
     } else {
       console.log("Upgraded user to pro:", userId);
+      // Save customer ID and mark subscription as active
+      await supabase
+        .from("users")
+        .update({
+          dodo_customer_id:     customerId ?? null,
+          subscription_status:  "active",
+          subscription_ends_at: periodEnd ?? null,
+        })
+        .eq("id", userId);
     }
 
+  } else if (eventType === "subscription.cancelled") {
+    // User cancelled but their paid period hasn't ended yet — keep Pro access.
+    // We only downgrade when subscription.expired fires at period end.
+    console.log("Subscription cancelled (still active until period end):", userId);
+    await supabase
+      .from("users")
+      .update({
+        subscription_status:  "cancelling",
+        subscription_ends_at: periodEnd ?? null,
+      })
+      .eq("id", userId);
+
   } else if (
-    eventType === "subscription.cancelled" ||
-    eventType === "subscription.failed" ||
-    eventType === "subscription.expired"
+    eventType === "subscription.expired" ||
+    eventType === "subscription.failed"
   ) {
+    // Period has ended or payment failed — downgrade to free now
     const { error } = await supabase.rpc("upgrade_user_tier", {
       target_user_id: userId,
       new_tier: "free",
@@ -113,7 +135,11 @@ Deno.serve(async (req) => {
       console.log("Downgraded user to free:", userId);
       await supabase
         .from("users")
-        .update({ subscription_portal_url: null })
+        .update({
+          subscription_status:   null,
+          subscription_ends_at:  null,
+          subscription_portal_url: null,
+        })
         .eq("id", userId);
     }
   }

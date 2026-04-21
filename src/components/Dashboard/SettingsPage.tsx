@@ -11,6 +11,7 @@ import {
   Zap,
   Loader2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,18 +23,23 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
 
-  // Fetch the customer portal URL so "Manage subscription" links to the right place
+  // Fetch subscription status so we can show a cancellation warning if needed
   useEffect(() => {
     if (!isPro || !user) return;
     supabase
       .from('users')
-      .select('subscription_portal_url')
+      .select('subscription_status, subscription_ends_at')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        if (data?.subscription_portal_url) setPortalUrl(data.subscription_portal_url);
+        if (data) {
+          setSubscriptionStatus(data.subscription_status);
+          setSubscriptionEndsAt(data.subscription_ends_at);
+        }
       });
   }, [isPro, user]);
 
@@ -52,7 +58,35 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
-  // Kicks off a Lemon Squeezy hosted checkout — same flow as the UpgradeModal
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        toast.error('Could not open subscription portal. Please try again.');
+        return;
+      }
+      window.open(data.url, '_blank');
+    } catch {
+      toast.error('Could not open subscription portal. Please try again.');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  // Kicks off a Dodo Payments hosted checkout — same flow as the UpgradeModal
   const handleUpgrade = async () => {
     setCheckoutLoading(true);
     try {
@@ -185,23 +219,33 @@ export default function SettingsPage() {
 
             {/* CTA */}
             {isPro ? (
-              // Pro users — link to their personal Lemon Squeezy customer portal
-              // portalUrl is saved by the webhook on subscription_created/updated
-              portalUrl ? (
-                <a
-                  href={portalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+              <div className="space-y-3">
+                {/* Cancellation warning banner */}
+                {subscriptionStatus === 'cancelling' && subscriptionEndsAt && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                      Your Pro plan is cancelled and will end on{' '}
+                      <span className="font-semibold">
+                        {new Date(subscriptionEndsAt).toLocaleDateString('en-US', {
+                          year: 'numeric', month: 'long', day: 'numeric',
+                        })}
+                      </span>. You keep full access until then.
+                    </p>
+                  </div>
+                )}
+                {/* Manage subscription button — generates a fresh portal link on click */}
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-60"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  Manage subscription
-                </a>
-              ) : (
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  To cancel, email us at support@tablesnap.co.in
-                </p>
-              )
+                  {portalLoading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Opening portal...</>
+                    : <><ExternalLink className="w-4 h-4" /> Manage subscription</>
+                  }
+                </button>
+              </div>
             ) : (
               // Free users — upgrade button
               <div className="flex items-center gap-4">

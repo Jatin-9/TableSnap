@@ -29,3 +29,6 @@ supabase/.temp/
 # AI tool folders — not part of the project source
 .bolt
 .cursor
+
+# MCP config — contains local API keys, never commit
+.mcp.json
