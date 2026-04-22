@@ -73,11 +73,17 @@ Deno.serve(async (req) => {
 
   // Dodo keeps status "active" even after cancellation — the real signal is this flag
   const isCancelling = (sub as any).cancel_at_next_billing_date === true;
-  const endsAt       = (sub as any).expires_at as string | null ?? null;
+  const endsAt       = (sub as any).next_billing_date as string | null ?? null;
 
   const newStatus = isCancelling ? "cancelling" : "active";
 
-  // Sync the latest state back to the DB so the webhook doesn't need to catch this
+  // Always ensure tier = pro when subscription is active or cancelling.
+  // This repairs the tier if it was accidentally set to free (e.g. by a manual test).
+  await supabase.rpc("upgrade_user_tier", {
+    target_user_id: user.id,
+    new_tier: "pro",
+  });
+
   await supabase
     .from("users")
     .update({
