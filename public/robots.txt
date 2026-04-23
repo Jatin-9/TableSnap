@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /super-admin
+Disallow: /reset-password
+
+Sitemap: https://tablesnap.co.in/sitemap.xml
