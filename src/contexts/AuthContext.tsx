@@ -135,17 +135,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // After clicking the confirmation link, send user straight to the dashboard.
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
     if (error) throw error;
-    // Insert the public users row immediately after auth signup.
-    // fetchUserProfile retries if onAuthStateChange races ahead of this insert.
-    if (data.user) {
-      await supabase.from('users').insert({
-        id: data.user.id,
-        email: data.user.email!,
-        role: 'user',
-      });
-    }
+    // User row is created by fetchUserProfile after the confirmation link is clicked.
   };
 
   const signIn = async (email: string, password: string) => {

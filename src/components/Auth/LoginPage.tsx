@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Table2, Mail, Lock, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 
 export default function LoginPage() {
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
+
 
   // Forgot-password inline view
   const [forgotMode, setForgotMode] = useState(false);
@@ -38,16 +40,23 @@ export default function LoginPage() {
     try {
       if (isSignUp) {
         await signUp(email, password);
+        await supabase.auth.signOut();
+        navigate('/');
+        toast.info('Check your email to confirm your account.', {
+          description: `We sent a confirmation link to ${email}`,
+          duration: 10000,
+        });
       } else {
         await signIn(email, password);
+        navigate('/dashboard');
       }
-      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +104,7 @@ export default function LoginPage() {
               {isSignUp ? 'Create your account' : 'Welcome back'}
             </p>
           </div>
+
 
           {/* ── Forgot-password inline view ─────────────────────────── */}
           {forgotMode && (
