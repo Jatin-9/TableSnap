@@ -177,9 +177,12 @@ export default function ResetPasswordPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 dark:text-gray-500 mt-6">
-          <Link to="/login" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+          <button
+            onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+            className="hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
             ← Back to login
-          </Link>
+          </button>
         </p>
       </div>
     </div>
