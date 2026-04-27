@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Table2, Lock, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -15,6 +15,21 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  // Track completion via ref so the cleanup effect always sees the latest value.
+  const doneRef = useRef(false);
+  useEffect(() => { doneRef.current = done; }, [done]);
+
+  // Sign out when leaving the page without completing the reset. This clears
+  // the recovery session from localStorage so the app doesn't treat it as a
+  // full login and redirect to the dashboard.
+  useEffect(() => {
+    return () => {
+      if (!doneRef.current) {
+        supabase.auth.signOut();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Listen for the PASSWORD_RECOVERY event — Supabase fires this when the
