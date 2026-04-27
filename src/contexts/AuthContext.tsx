@@ -47,6 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // refreshes the access token in the background. The user hasn't changed at all,
       // so we skip the full reload to avoid unnecessary re-renders across the whole app.
       if (event === 'TOKEN_REFRESHED') return;
+      // PASSWORD_RECOVERY creates a short-lived session just for resetting the password.
+      // We don't want the app to treat this as a full login — the ResetPasswordPage
+      // handles this event separately. Ignoring it here prevents an unwanted redirect
+      // to /dashboard if the user cancels or navigates away without resetting.
+      if (event === 'PASSWORD_RECOVERY') return;
 
       (async () => {
         // Do NOT set loading:true here. The loading flag is only for the very first
