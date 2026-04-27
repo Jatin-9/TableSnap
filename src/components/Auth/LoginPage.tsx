@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Table2, Mail, Lock, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner';
 
 
 export default function LoginPage() {
@@ -16,6 +15,9 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
 
+
+  // Modal shown after successful sign-up
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   // Forgot-password inline view
   const [forgotMode, setForgotMode] = useState(false);
@@ -41,11 +43,7 @@ export default function LoginPage() {
       if (isSignUp) {
         await signUp(email, password);
         await supabase.auth.signOut();
-        navigate('/');
-        toast.info('Check your email to confirm your account.', {
-          description: `We sent a confirmation link to ${email}`,
-          duration: 10000,
-        });
+        setShowEmailModal(true);
       } else {
         await signIn(email, password);
         navigate('/dashboard');
@@ -338,6 +336,36 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+
+      {/* ── Email confirmation modal ─────────────────────────────────── */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-8 flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-xl bg-blue-600/10 flex items-center justify-center mb-5">
+              <Mail className="w-7 h-7 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              Check your inbox
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-2">
+              We sent a confirmation link to
+            </p>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-5">
+              {email}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-8 leading-relaxed">
+              Click the link in the email to activate your account and sign in.
+              The link expires in 1 hour.
+            </p>
+            <button
+              onClick={() => { setShowEmailModal(false); navigate('/'); }}
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-blue-600/20"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
