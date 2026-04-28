@@ -380,6 +380,19 @@ export default function SettingsPage() {
         </div>
 
       </div>
+
+      {/* Support */}
+      <div className="mt-6 max-w-4xl text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Need help or found a bug?{' '}
+          <a
+            href="mailto:support@tablesnap.co.in"
+            className="text-blue-500 hover:text-blue-600 transition-colors font-medium"
+          >
+            support@tablesnap.co.in
+          </a>
+        </p>
+      </div>
     </div>
   );
 }

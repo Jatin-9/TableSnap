@@ -54,6 +54,15 @@ export default function Footer() {
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Built for students, researchers, and language learners worldwide.
           </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            Need help?{' '}
+            <a
+              href="mailto:support@tablesnap.co.in"
+              className="text-blue-500 hover:text-blue-600 transition-colors"
+            >
+              support@tablesnap.co.in
+            </a>
+          </p>
           <p className="text-xs text-gray-400/60 dark:text-gray-500/60 mt-2">
             © {new Date().getFullYear()} TableSnap. All rights reserved.
           </p>
